@@ -1,4 +1,6 @@
-# LLM Context Retention and Narrative Consistency Project Repo
+# Local LM Oneshot Campaign Repo
+
+Adaptation of my LLM-Pen-and-Paper project.
 
 ### By Konrad Rejmanowski
 
