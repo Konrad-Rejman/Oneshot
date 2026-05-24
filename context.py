@@ -5,7 +5,7 @@ import time, copy, spacy
 
 nlp = spacy.load('en_core_web_md')
 
-def semantic_context(chatlogs, context_logs, memory, rules, client, model, hierarchical_summary, tokens, save, backup, n=2):
+def context_update(chatlogs, context_logs, memory, rules, client, model, hierarchical_summary, tokens, save, backup, n=2):
     try:
         old_chatlogs = copy.deepcopy(chatlogs)
         old_context_logs = copy.deepcopy(context_logs)

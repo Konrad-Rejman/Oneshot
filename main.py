@@ -1,17 +1,13 @@
 import google.genai as genai
-import os, random, time, pickle
+import os, time, pickle
 import pandas as pd
 from dotenv import load_dotenv
-from context_full_history import full_history
-from context_n_latest import n_latest
-from context_running_summary import running_summary
-from context_hierarchical_summary import hierarchical_context
-from context_semantic_summary import semantic_context
+from context import context_update
 
 load_dotenv()
 
 client = genai.Client(api_key=os.getenv('APIKEY'))
-model = 'gemini-2.5-pro'
+model = 'gemini-2.5-flash'
 
 # Model setup
 rules = {'role': 'user', 'parts': [{'text': 
@@ -49,40 +45,20 @@ startMessage = '''You stir as the first light of dawn filters through a canopy o
 
 Your head throbs as you try to remember what has happened, rolling a Wisdom check you roll a... 9 and realize you have no memory of who you are, how you got here, or why the caravan is ruined. 
 
-The only clue is a faint, silver-etched token clutched in your hand—a small medallion shaped like a stylized wolf\'s head, warm to the touch. As you stare at the wreckage, you notice a faint trail of disturbed leaves and broken twigs snaking away from the caravan into the dense forest.'''
+The only clue is a faint, silver-etched token clutched in your hand, a small medallion shaped like a stylized wolf\'s head, warm to the touch. As you stare at the wreckage, you notice a faint trail of disturbed leaves and broken twigs snaking away from the caravan into the dense forest.'''
 
 # Conversation history
 chatlogs = [{'role': 'model', 'parts': [{'text': startMessage}]}] # Full chat history
 context_logs = [] # Memory history, what was in models memory at each prompt
 
-# Summaries of overall story, these are updated in the Running_Summary and Hierarchical_Summary context methods
-summary = 'STORY SUMMARY: The player has woken up on a forest road with no memories and nothing but the clothes on their back and a small silver medallion shaped like a stylized wolf\'s head, they are beside a caravan which has been destroyed, a trail leads from the wreckage into the forest surrounding them. The player rolled a Wisdom check resulting in a 9, revealing no clues as to their identity. The player must find civilization and uncover clues as to their identity along the way, they should also be given the chance to help the people they encounter by fighting monsters.'
-hierarchical_summary = 'OVERALL STORY: The player must find civilization and uncover clues as to their identity along the way, they should also be given the chance to help the people they encounter by fighting monsters.\n\nCURRENT QUEST: The player is inside a forest beside a caravan which has been destroyed, a trail leads from the wreckage into the forest. The player rolled a Wisdom check resulting in a 9, revealing no clues as to their identity. The player must find a way out of the forest.\n\nPLAYER STATUS: The player has woken up with no memories and nothing but the clothes on their back and a small silver medallion shaped like a stylized wolf\'s head.'
+# Summary of overall story
+summary = 'OVERALL STORY: The player must find civilization and uncover clues as to their identity along the way, they should also be given the chance to help the people they encounter by fighting monsters.\n\nCURRENT QUEST: The player is inside a forest beside a caravan which has been destroyed, a trail leads from the wreckage into the forest. The player rolled a Wisdom check resulting in a 9, revealing no clues as to their identity. The player must find a way out of the forest.\n\nPLAYER STATUS: The player has woken up with no memories and nothing but the clothes on their back and a small silver medallion shaped like a stylized wolf\'s head.'
 
 # Memory
-memory = [rules, {'role': 'user', 'parts': [{'text': summary}]}, {'role': 'model', 'parts': [{'text': startMessage}]}] # Model context
+memory = [rules, {'role': 'model', 'parts': [{'text': startMessage}]}] # Model context
 
 # Initialise token counter
 tokens = 0
-
-# Feedback collection
-def feedback():
-    valid_numbers = set(['1', '2', '3', '4', '5', '6', '7'])
-
-    # Get feedback
-    print('On a scale of 1 - 7, how would you rate the completed session on the following:\n')
-
-    consistency = input('The GMs ability to maintain a consistent narrative: ')
-    adherence = input('The GMs ability to follow established rules: ')
-    creativity = input('The GMs creativity in storytelling: ')
-    enjoyment = input('Your overall enjoyment of the game session: ')
-
-    # If any of the values entered are not valid numbers
-    if consistency not in valid_numbers or adherence not in valid_numbers or creativity not in valid_numbers or enjoyment not in valid_numbers:
-        print('\nOne of the values you entered was not between 1 and 7, please try again.')
-        return feedback()
-    
-    return consistency, adherence, creativity, enjoyment
 
 # Run on exit
 def save():
@@ -96,7 +72,7 @@ def save():
     os.makedirs(folder_name)
 
     # Construct chatlogs file name
-    file_name = str(file_number) + '_' + method + '_' + user
+    file_name = str(file_number) + '_' + user
     file_path = os.path.join(folder_name, file_name + '.txt')
 
     # Write a file containing the session chatlogs
@@ -108,7 +84,7 @@ def save():
                 file.write('PLAYER:\n\n' + prompt['parts'][0]['text'] + '\n\n')
     
     # Construct contextlogs file name
-    file_name = str(file_number) + '_' + method + '_' + user + '_' + 'Context_Logs'
+    file_name = str(file_number) + '_' + user + '_' + 'Context_Logs'
     file_path = os.path.join(folder_name, file_name + '.txt')
 
     # Write a file containing the memory context at each prompt
@@ -126,25 +102,17 @@ def save():
                 else:
                     file.write('Other:\n\n' + prompt['parts'][0]['text'] + '\n\n')
 
-    # Get feedback
-    consistency, adherence, creativity, enjoyment = feedback()
-
     # Add endtime to last session
     playtime[-1].append(time.time())
 
     # Construct file name
-    file_name = str(file_number) + '_' + method + '_' + user
+    file_name = str(file_number) + '_' + user
 
     session_data = {
         'Session': [file_name], 
         'User': [user],
-        'Context Method': [method],
-        'Consistency (1-7)': [consistency], 
-        'Rule Adherence (1-7)': [adherence], 
-        'Creativity (1-7)': [creativity], 
-        'Enjoyment (1-7)': [enjoyment], 
         'Tokens': [tokens], 
-        'Playtime (s)': [sum(round(s[1] - s[0]) for s in playtime)] # Sum session endtime-starttime for each session
+        'Playtime (s)': [sum(round(s[1] - s[0]) for s in playtime)] # Sum session endtime-starttime for each session instance
     }
     new_row = pd.DataFrame(session_data)
 
@@ -161,7 +129,6 @@ def backup(chatlogs, context_logs, memory, tokens):
     # Save backup data
     backup_data = {
         'User': user,
-        'Context Method': method,
         'Chat Logs': chatlogs,
         'Context Logs': context_logs,
         'Tokens': tokens,
@@ -178,7 +145,6 @@ if 'backup.pkl' in os.listdir():
     backup_data = pickle.load(open('backup.pkl', 'rb'))
 
     user = backup_data['User']
-    method = backup_data['Context Method']
     chatlogs = backup_data['Chat Logs']
     context_logs = backup_data['Context Logs']
     tokens = backup_data['Tokens']
@@ -189,16 +155,7 @@ if 'backup.pkl' in os.listdir():
     hierarchical_summary = backup_data['Hierarchical Summary']
 
     while True:
-        if method == 'Full_Context':
-            tokens, memory = full_history(chatlogs, context_logs, memory, client, model, tokens, save, backup)
-        elif method == 'N_Latest':
-            tokens, memory = n_latest(chatlogs, context_logs, memory, client, model, tokens, save, backup)
-        elif method == 'Running_Summary':
-            tokens, memory, summary = running_summary(chatlogs, context_logs, memory, rules, client, model, summary, tokens, save, backup)
-        elif method == 'Hierarchical_Summary':
-            tokens, memory, hierarchical_summary = hierarchical_context(chatlogs, context_logs, memory, rules, client, model, hierarchical_summary, tokens, save, backup)
-        elif method == 'Semantic_Summary':
-            tokens, memory, hierarchical_summary = semantic_context(chatlogs, context_logs, memory, rules, client, model, hierarchical_summary, tokens, save, backup)
+        tokens, memory, hierarchical_summary = context_update(chatlogs, context_logs, memory, rules, client, model, summary, tokens, save, backup)
 
 # Game start
 print('Press ctrl + c to exit.')
@@ -209,40 +166,7 @@ print('Generating...')
 user = input('Enter your username (please use the same username for each session): ')
 playtime = [[time.time()]]
 
-# Choose a context method the user hasn't used yet randomly, else choose a random method
-context_methods = ['Full_Context', 'N_Latest', 'Running_Summary', 'Hierarchical_Summary', 'Semantic_Summary'] # List of implemented methods
-random.shuffle(context_methods) # Randomise order of methods
-
-# Check data file for users previous sessions
-df = pd.read_csv('data.csv', index_col=0)
-df = df[df['User'] == user]
-
-# Choose a method the user hasn't seen yet, if possible
-method = None
-
-seen = set(v for i, v in df['Context Method'].items()) # Get set of context methods the user has seen already
-
-for m in context_methods:
-    if m not in seen: # If user has not seen context method, use that method
-        method = m
-        break
-
-if not method: # If user has used every context method at least once, choose a random method
-    method = random.choice(context_methods)
-
-if method == 'Semantic_Summary': # For semantic summary both memory and summary matter, so additional summary cannot be present in memory
-    memory.remove({'role': 'user', 'parts': [{'text': summary}]})
-
 # Core loop, prompting the Model to continue with the story until the player exits using Ctrl + C
 print('\nGM:\n\n' + startMessage)
 while True:
-    if method == 'Full_Context':
-        tokens, memory = full_history(chatlogs, context_logs, memory, client, model, tokens, save, backup)
-    elif method == 'N_Latest':
-        tokens, memory = n_latest(chatlogs, context_logs, memory, client, model, tokens, save, backup)
-    elif method == 'Running_Summary':
-        tokens, memory, summary = running_summary(chatlogs, context_logs, memory, rules, client, model, summary, tokens, save, backup)
-    elif method == 'Hierarchical_Summary':
-        tokens, memory, hierarchical_summary = hierarchical_context(chatlogs, context_logs, memory, rules, client, model, hierarchical_summary, tokens, save, backup)
-    elif method == 'Semantic_Summary':
-        tokens, memory, hierarchical_summary = semantic_context(chatlogs, context_logs, memory, rules, client, model, hierarchical_summary, tokens, save, backup)
+    tokens, memory, hierarchical_summary = context_update(chatlogs, context_logs, memory, rules, client, model, summary, tokens, save, backup)
