@@ -4,6 +4,10 @@ Adaptation of my LLM-Pen-and-Paper project.
 
 ### By Konrad Rejmanowski
 
+## Acknowledgement
+
+This project is currently built to use the Mistral-7B-Instruct-v0.3 model, which you can find on HuggingFace at https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3.
+
 ## Setup:
 
 ### Installation:
@@ -14,14 +18,17 @@ You will need the following installed in order to run the program:
 
 ##### Pip
 2. pandas
-3. dotenv
-4. google-genai
-5. rouge-score
-6. scikit-learn
-7. spacy
+3. rouge-score
+4. scikit-learn
+5. spacy
+6. transformers 
+7. torch 
+8. accelerate 
+9. sentencepiece
+10. huggingface_hub
 
 ##### Pthon -m
-8. en_core_web_md (python -m spacy download en_core_web_md)
+11. en_core_web_md (python -m spacy download en_core_web_md)
 
 You can check for dependencies in the requirements.txt file.
 
@@ -29,7 +36,6 @@ You can check for dependencies in the requirements.txt file.
 
 You will need to initialise the following correctly:
 
-- A .env file with your 'APIKEY' variable declared (this is a link to google AI studios API: https://ai.google.dev/gemini-api/docs).
 - A data.csv file with the headings ',Session,User,Tokens,Playtime (s)' for data on the sessions and feedback to be collected.
 - A 'sessions' folder in the root directory for session transcripts to be saved.
 
