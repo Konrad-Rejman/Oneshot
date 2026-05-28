@@ -1,54 +1,114 @@
-from transformers import AutoTokenizer, AutoModelForCausalLM
-import torch
+import requests
+import json
 
-# Load Model
-MODEL_NAME = 'mistralai/Mistral-7B-Instruct-v0.3'
+OLLAMA_API = "http://localhost:11434/api/generate"
+MODEL_NAME = "mistral:instruct"
 
-tokenizer = AutoTokenizer.from_pretrained(
-    MODEL_NAME,
-    trust_remote_code=True
-)
+def _build_prompt_from_memory(memory):
+    parts = []
+    for item in memory:
+        role = item.get('role', 'user')
+        content = item.get('content', '')
+        parts.append(f"{role.upper()}:\n{content}\n\n")
+    return ''.join(parts)
 
-model = AutoModelForCausalLM.from_pretrained(
-    MODEL_NAME,
-    dtype=torch.float16,
-    device_map='auto',
-    trust_remote_code=True
-)
+def generate_response(memory, stream=False):
+    '''
+    Get a response from local Ollama server and return the full text. Stream as GM output if stream variable is set to True.
 
-model.eval()
+    Args:
+        memory: list of messages (dicts with 'role' and 'content') or a prompt object
+        stream: if True, print tokens to stdout as they arrive. Defaults to False.
 
-# Model call function
-def generate_response(memory):
+    Returns (response_text, prompt_token_estimate)
+    '''
+    prompt_text = _build_prompt_from_memory(memory)
 
-    prompt = tokenizer.apply_chat_template(
-        memory,
-        tokenize=False,
-        add_generation_prompt=True
-    )
+    payload = {
+        'model': MODEL_NAME,
+        'prompt': prompt_text,
+        'stream': True
+    }
 
-    inputs = tokenizer(
-        prompt,
-        return_tensors='pt'
-    ).to(model.device)
+    try:
+        resp = requests.post(OLLAMA_API, json=payload, stream=True, timeout=60)
+    except Exception as e:
+        raise RuntimeError(f"Failed to connect to Ollama server: {e}")
 
-    prompt_tokens = inputs.input_ids.shape[1]
+    if resp.status_code != 200:
+        raise RuntimeError(f"Ollama returned status {resp.status_code}: {resp.text}")
 
-    with torch.no_grad():
+    response_text = ''
+    first_chunk = True
 
-        output = model.generate(
-            **inputs,
-            max_new_tokens=250,
-            temperature=0.8,
-            do_sample=True,
-            pad_token_id=tokenizer.eos_token_id
-        )
+    # Stream output as GM
+    if stream:
+        print("\nGM:\n\n", end='', flush=True)
 
-    generated = output[0][prompt_tokens:]
+    for raw_line in resp.iter_lines(decode_unicode=True):
+        if raw_line is None:
+            continue
 
-    response = tokenizer.decode(
-        generated,
-        skip_special_tokens=True
-    )
+        # Normalize to str whether raw_line is bytes or str
+        if isinstance(raw_line, bytes):
+            line = raw_line.decode('utf-8', errors='ignore').strip()
+        else:
+            line = raw_line.strip()
 
-    return response.strip(), prompt_tokens
+        if not line:
+            continue
+
+        # Some servers prefix SSE data with 'data: '
+        prefix = 'data: '
+        if line.startswith(prefix):
+            data = line[len(prefix):]
+        else:
+            data = line
+
+        if data == '[DONE]':
+            break
+
+        try:
+            obj = json.loads(data)
+        except Exception:
+            # Not JSON - treat as raw text chunk
+            chunk = data
+            print(chunk, end='', flush=True)
+            response_text += chunk
+            continue
+
+        # Attempt to extract text from several known shapes
+        chunk = ''
+        if isinstance(obj, dict):
+            # Common Ollama fields
+            if 'response' in obj and isinstance(obj['response'], str):
+                chunk = obj['response']
+            elif 'token' in obj and isinstance(obj['token'], str):
+                chunk = obj['token']
+            elif 'text' in obj and isinstance(obj['text'], str):
+                chunk = obj['text']
+            elif 'choices' in obj and isinstance(obj['choices'], list):
+                # Pull incremental content from choices
+                for choice in obj['choices']:
+                    if isinstance(choice, dict):
+                        if 'delta' in choice and isinstance(choice['delta'], dict):
+                            delta = choice['delta']
+                            chunk = delta.get('content') or delta.get('text') or chunk
+                        chunk = choice.get('text') or chunk
+
+        if chunk:
+            if first_chunk:
+                chunk = chunk.lstrip()
+                first_chunk = False
+            if chunk:
+                if stream:
+                    print(chunk, end='', flush=True)
+                response_text += chunk
+
+    if stream:
+        print('\n', end='', flush=True)
+
+    # Rough token estimate
+    prompt_tokens = max(1, len(prompt_text.split()))
+
+    return response_text.strip(), prompt_tokens

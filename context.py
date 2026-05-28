@@ -6,7 +6,7 @@ import copy, spacy
 
 nlp = spacy.load('en_core_web_md')
 
-def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, tokens, save, backup, n=2):
+def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, tokens, save, backup, n=3):
 
     try:
         old_chatlogs = copy.deepcopy(chatlogs)
@@ -27,7 +27,9 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
         })
 
         rolls_message = rolls()
-        rules['content'] += rolls_message
+        # Preserve original rules content so we can restore it later
+        original_rules_content = rules['content']
+        rules['content'] = original_rules_content + rolls_message
 
         if memory[0] == rules:
 
@@ -48,7 +50,8 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
             )
 
         try:
-            response_text, prompt_tokens = generate_response(memory)
+            # Response streamed by function
+            response_text, prompt_tokens = generate_response(memory, stream=True)
 
         except KeyboardInterrupt:
 
@@ -73,18 +76,17 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
         tokens += prompt_tokens
 
         chatlogs.append({
-            'role':'model',
+            'role':'assistant',
             'content':response_text
         })
 
         memory.append({
-            'role':'model',
+            'role':'assistant',
             'content':response_text
         })
 
-        rules['content'] -= rolls_message
+        rules['content'] = original_rules_content
         memory.remove(rules)
-        memory.remove(rolls_message)
 
         summary_msg = {
             'role': 'user',
@@ -195,8 +197,6 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
                     )
                 ]
             )
-
-        print("\nGM:\n\n" + response_text)
 
         context_logs.append(context)
 
