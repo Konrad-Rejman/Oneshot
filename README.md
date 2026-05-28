@@ -14,7 +14,7 @@ This project is currently built to use the Mistral-7B-Instruct-v0.3 model, which
 
 You will need the following installed in order to run the program:
 
-1. Python
+1. Python 3.12 (Version is important for compatibility with GPU Processing)
 
 ##### Pip
 2. pandas
@@ -22,13 +22,14 @@ You will need the following installed in order to run the program:
 4. scikit-learn
 5. spacy
 6. transformers 
-7. torch 
-8. accelerate 
-9. sentencepiece
-10. huggingface_hub
+7. accelerate 
+8. sentencepiece
+9. huggingface_hub
 
 ##### Pthon -m
-11. en_core_web_md (python -m spacy download en_core_web_md)
+10. en_core_web_md (python -m spacy download en_core_web_md)
+11. torch (python -m pip install torch)
+12. torchvision (python -m pip install torchvision)
 
 You can check for dependencies in the requirements.txt file.
 

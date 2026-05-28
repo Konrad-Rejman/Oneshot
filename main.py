@@ -4,7 +4,7 @@ from context import context_update
 from model import tokenizer, model
 
 # Model setup
-rules = {'role': 'user', 'content':
+rules = {'role': 'system', 'content':
     '''You are the GameMaster of a pen and paper RPG. The user is the player.
 
     The following rules are mandatory.
@@ -42,14 +42,14 @@ Your head throbs as you try to remember what has happened, rolling a Wisdom chec
 The only clue is a faint, silver-etched token clutched in your hand, a small medallion shaped like a stylized wolf\'s head, warm to the touch. As you stare at the wreckage, you notice a faint trail of disturbed leaves and broken twigs snaking away from the caravan into the dense forest.'''
 
 # Conversation history
-chatlogs = [{'role': 'system', 'context': startMessage}] # Full chat history
+chatlogs = [{'role': 'assistant', 'context': startMessage}] # Full chat history
 context_logs = [] # Memory history, what was in models memory at each prompt
 
 # Summary of overall story
 summary = 'OVERALL STORY: The player must find civilization and uncover clues as to their identity along the way, they should also be given the chance to help the people they encounter by fighting monsters.\n\nCURRENT QUEST: The player is inside a forest beside a caravan which has been destroyed, a trail leads from the wreckage into the forest. The player rolled a Wisdom check resulting in a 9, revealing no clues as to their identity. The player must find a way out of the forest.\n\nPLAYER STATUS: The player has woken up with no memories and nothing but the clothes on their back and a small silver medallion shaped like a stylized wolf\'s head.'
 
 # Memory
-memory = [rules, {'role': 'system', 'context': startMessage}] # Model context
+memory = [rules, {'role': 'assistant', 'context': startMessage}] # Model context
 
 # Initialise token counter
 tokens = 0
@@ -72,10 +72,10 @@ def save():
     # Write a file containing the session chatlogs
     with open(file_path, 'w', encoding='utf-8') as file:
         for prompt in chatlogs:
-            if prompt['role'] == 'system':
-                file.write('GM:\n\n' + prompt['parts'][0]['text'] + '\n\n')
+            if prompt['role'] == 'system' or prompt['role'] == 'assistant':
+                file.write('GM:\n\n' + prompt['context'] + '\n\n')
             elif prompt['role'] == 'user':
-                file.write('PLAYER:\n\n' + prompt['parts'][0]['text'] + '\n\n')
+                file.write('PLAYER:\n\n' + prompt['context'] + '\n\n')
     
     # Construct contextlogs file name
     file_name = str(file_number) + '_' + user + '_' + 'Context_Logs'
@@ -89,12 +89,12 @@ def save():
                 if isinstance(prompt, int):
                     # Token usage at interaction i+1
                     file.write('Token usage: ' + str(prompt) + '\n\n')
-                elif prompt['role'] == 'system':
-                    file.write('Model:\n\n' + prompt['parts'][0]['text'] + '\n\n')
+                elif prompt['role'] == 'system' or prompt['role'] == 'assistant':
+                    file.write('Model:\n\n' + prompt['context'] + '\n\n')
                 elif prompt['role'] == 'user':
-                    file.write('User:\n\n' + prompt['parts'][0]['text'] + '\n\n')
+                    file.write('User:\n\n' + prompt['context'] + '\n\n')
                 else:
-                    file.write('Other:\n\n' + prompt['parts'][0]['text'] + '\n\n')
+                    file.write('Other:\n\n' + prompt['context'] + '\n\n')
 
     # Add endtime to last session
     playtime[-1].append(time.time())
@@ -145,7 +145,6 @@ if 'backup.pkl' in os.listdir():
     playtime.append([time.time()]) # Add current session starttime
     memory = backup_data['Memory']
     summary = backup_data['Summary']
-    hierarchical_summary = backup_data['Hierarchical Summary']
 
     # Initiate game loop from backup
     while True:

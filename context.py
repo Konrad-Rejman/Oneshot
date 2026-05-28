@@ -27,12 +27,12 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
         })
 
         rolls_message = rolls()
+        rules['content'] += rolls_message
 
         if memory[0] == rules:
 
             memory = (
                 [rules,
-                 rolls_message,
                  {'role': 'user', 'content': hierarchical_summary}]
                 + memory[1:]
                 + [{'role': 'user', 'content': action}]
@@ -42,7 +42,6 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
 
             memory = (
                 [rules,
-                 rolls_message,
                  {'role': 'user', 'content': hierarchical_summary}]
                 + memory
                 + [{'role': 'user', 'content': action}]
@@ -83,6 +82,7 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
             'content':response_text
         })
 
+        rules['content'] -= rolls_message
         memory.remove(rules)
         memory.remove(rolls_message)
 
