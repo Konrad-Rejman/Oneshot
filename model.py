@@ -68,8 +68,11 @@ def generate_response(memory, stream=False):
         if data == '[DONE]':
             break
 
+        prompt_eval_count = 0
         try:
             obj = json.loads(data)
+            if isinstance(obj, dict) and obj.get('done'):
+                prompt_eval_count = obj.get('prompt_eval_count', 0)
         except Exception:
             # Not JSON - treat as raw text chunk
             chunk = data
@@ -108,7 +111,5 @@ def generate_response(memory, stream=False):
     if stream:
         print('\n', end='', flush=True)
 
-    # Rough token estimate
-    prompt_tokens = max(1, len(prompt_text.split()))
-
-    return response_text.strip(), prompt_tokens
+    # Return response + prompt token count
+    return response_text.strip(), prompt_eval_count
