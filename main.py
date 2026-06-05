@@ -1,4 +1,5 @@
-import os, time, pickle
+import os, time, pickle, subprocess
+import requests
 import pandas as pd
 from context import context_update
 
@@ -136,6 +137,28 @@ def backup(chatlogs, context_logs, memory, tokens):
         'Summary': summary
     }
     pickle.dump(backup_data, open('backup.pkl', 'wb'))
+
+# Check that ollama is running
+# If not, start ollama as a separate process
+try:
+    requests.get("http://localhost:11434", timeout=2)
+except Exception:
+    print("Ollama not detected, starting server...")
+    kwargs = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+    if hasattr(subprocess, "CREATE_NO_WINDOW"):
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+    subprocess.Popen(["ollama", "serve"], **kwargs)
+    for _ in range(20):
+        time.sleep(1)
+        try:
+            requests.get("http://localhost:11434", timeout=2)
+            print("Ollama started.")
+            break
+        except Exception:
+            continue
+    else:
+        print("Could not start Ollama. Please run 'ollama serve' manually.")
+        quit()
 
 # Check if backup exists, if so then carry on interrupted session
 if 'backup.pkl' in os.listdir():
