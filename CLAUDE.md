@@ -30,15 +30,16 @@ The game runs as a terminal loop where the LLM plays a D&D-style Game Master.
 
 1. User inputs their action
 2. 5 pre-generated D20 rolls (`rolls.py`) are appended to the system prompt so the model uses them instead of hallucinating numbers
-3. The model receives: `[system rules + rolls] + [hierarchical summary] + [last n=3 interactions] + [current action]`
-4. Response is streamed from Ollama (`model.py:generate_response`)
-5. A second model call generates 3 candidate updated summaries of the story state
-6. The best summary is selected by a weighted score of cosine similarity (0.5) + ROUGE-1/2/L (0.2 each) against the reference (old summary + last interactions)
-7. Only the last `2*n` messages are kept in `memory` for the next turn
+3. **Pre-send trim:** oldest messages are dropped from the prompt until the estimated token count is under `TOKEN_LIMIT` (4096). Estimation uses `len(content) // 4` per message.
+4. The model receives: `[system rules + rolls] + [hierarchical summary] + [as many recent messages as fit] + [current action]`
+5. Response is streamed from Ollama (`model.py:generate_response`)
+6. A second model call generates 3 candidate updated summaries of the story state
+7. The best summary is selected by a weighted score of cosine similarity (0.5) + ROUGE-1/2/L (0.2 each) against the reference (old summary + last interactions)
+8. **Post-summary trim:** persistent `memory` is trimmed (oldest first) so that next turn's full prompt will fit under 4096 tokens, using the updated summary's actual token cost: `budget = TOKEN_LIMIT - rules_tokens - ROLLS_TOKEN_RESERVE - summary_tokens - ACTION_TOKEN_RESERVE`
 
 **State tracked across turns:**
 - `chatlogs` — full conversation history (written to file on exit)
-- `memory` — sliding window passed to model each turn (last 6 messages)
+- `memory` — token-budget-bounded history passed to the model each turn; retains as many messages as fit within the 4096-token limit (adaptive — more history early in a session when messages are short)
 - `hierarchical_summary` — compressed story state string with sections OVERALL STORY / CURRENT QUEST / PLAYER STATUS
 - `context_logs` — what was in memory at each prompt (for debugging/analysis)
 - `tokens` — cumulative prompt token count from Ollama's `prompt_eval_count`
@@ -51,4 +52,4 @@ The game runs as a terminal loop where the LLM plays a D&D-style Game Master.
 
 - `model.py`: `MODEL_NAME = "mistral:instruct"`, `OLLAMA_API = "http://localhost:11434/api/generate"`
 - `rolls.py`: `roll_num = 5` — number of D20 rolls per turn
-- `context.py`: `n=3` — number of recent interactions kept in sliding window memory
+- `context.py`: `TOKEN_LIMIT = 4096` — maximum estimated tokens per prompt; `ROLLS_TOKEN_RESERVE = 30` — token budget reserved for the rolls message; `ACTION_TOKEN_RESERVE = 200` — token budget reserved for the user's next action in post-summary trim
