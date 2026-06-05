@@ -6,7 +6,14 @@ import copy, spacy
 
 nlp = spacy.load('en_core_web_md')
 
-def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, tokens, save, backup, n=3):
+TOKEN_LIMIT = 4096
+ROLLS_TOKEN_RESERVE = 30
+ACTION_TOKEN_RESERVE = 200
+
+def _estimate_tokens(messages):
+    return sum(len(msg.get('content', '')) for msg in messages) // 4
+
+def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, tokens, save, backup):
 
     try:
         old_chatlogs = copy.deepcopy(chatlogs)
@@ -48,6 +55,11 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
                 + memory
                 + [{'role': 'user', 'content': action}]
             )
+
+        # Pre-send safety trim: drop oldest old messages until prompt fits under token limit
+        # memory layout: [rules, summary, ...old interactions..., action]
+        while _estimate_tokens(memory) > TOKEN_LIMIT and len(memory) > 3:
+            memory.pop(2)
 
         try:
             # Response streamed by function
@@ -95,9 +107,6 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
 
         if summary_msg in memory:
             memory.remove(summary_msg)
-
-        if len(memory) > 2 * n:
-            memory = memory[-2*n:]
 
         last_n_interactions = ""
 
@@ -197,6 +206,13 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
                     )
                 ]
             )
+
+        # Post-summary trim: trim persistent memory using updated summary's actual token cost
+        rules_tokens = len(rules['content']) // 4
+        summary_tokens = len(hierarchical_summary) // 4
+        memory_budget = TOKEN_LIMIT - rules_tokens - ROLLS_TOKEN_RESERVE - summary_tokens - ACTION_TOKEN_RESERVE
+        while _estimate_tokens(memory) > memory_budget and memory:
+            memory.pop(0)
 
         context_logs.append(context)
 
