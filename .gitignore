@@ -4,3 +4,4 @@ sessions
 data.csv
 *.pkl
 .venv*
+.claude/settings.local.json

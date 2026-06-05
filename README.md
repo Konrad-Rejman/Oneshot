@@ -1,51 +1,44 @@
-# Local LM Oneshot Campaign Repo
+# Oneshot – Local LLM Pen-and-Paper RPG
 
-Adaptation of my LLM-Pen-and-Paper project.
+A terminal RPG where a local LLM acts as your Game Master. You describe your character's actions each turn and the GM responds with the outcome, advancing the story. A D20 dice system resolves chance-based actions, and an automatic context summarization system maintains story continuity across a full session.
 
-### By Konrad Rejmanowski
+## Setup
 
-## Acknowledgement
+### Prerequisites
 
-This project is currently built to use the Mistral-7B-Instruct-v0.3 model, which you can find on HuggingFace at https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3.
+**Python 3.12** (required for compatibility with GPU processing)
 
-## Setup:
+**Ollama** with the Mistral Instruct model:
 
-### Installation:
+```bash
+ollama pull mistral:instruct
+ollama serve
+```
 
-You will need the following installed in order to run the program:
+### Installation
 
-1. Python 3.12 (Version is important for compatibility with GPU Processing)
+```bash
+pip install -r requirements.txt
+python -m spacy download en_core_web_md
+```
 
-##### Pip
-2. pandas
-3. rouge-score
-4. scikit-learn
-5. spacy
-6. transformers 
-7. accelerate 
-8. sentencepiece
-9. huggingface_hub
+### Additional Files / Directories
 
-##### Pthon -m
-10. en_core_web_md (python -m spacy download en_core_web_md)
-11. torch (python -m pip install torch)
-12. torchvision (python -m pip install torchvision)
+Before the first run, create the following in the project root:
 
-You can check for dependencies in the requirements.txt file.
+- A `sessions/` folder — session transcripts are saved here
+- A `data.csv` file with the headers `,Session,User,Tokens,Playtime (s)` — used to record session analytics
 
-### Additional Files / Directories:
+## Running
 
-You will need to initialise the following correctly:
+```bash
+python main.py
+```
 
-- A data.csv file with the headings ',Session,User,Tokens,Playtime (s)' for data on the sessions and feedback to be collected.
-- A 'sessions' folder in the root directory for session transcripts to be saved.
+The program will initialise and start the gameplay loop. Press `Ctrl+C` to exit and save the session.
 
-### Running Program:
+If the program crashes unexpectedly, a `backup.pkl` file is saved with the full session state. The next run will automatically resume from it. Delete `backup.pkl` once it has been loaded to start a fresh session.
 
-To run the program, follow all previous instructions and (ensuring you are in the correct root directory in terminal) run the command 'python main.py' in the terminal (ensuring you have an up-to-date version of python installed). 
+## Credits
 
-The program should run correctly from there, initialising the model and starting the gameplay loop. To exit the program, press ctrl + c.
-
-If an unexpected session interrupt occurs a backup.pkl file should be saved containing the session details at time of failure. This file will ensure that the next time the code is run, it loads the saved backup data instead of starting again. 
-
-For correct functionality delete this backup file once the data has been loaded into the new session, otherwise it will continually attempt to load from backup.
+By Konrad Rejmanowski

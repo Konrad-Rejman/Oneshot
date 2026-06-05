@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "$py = git status --porcelain 2>$null | Where-Object { $_ -match '\\.py$' }; if ($py) { Write-Output '{\"hookSpecificOutput\":{\"hookEventName\":\"Stop\",\"additionalContext\":\"Python source files were modified this session. Before finishing, review README.md (and CLAUDE.md if architecture changed) to check whether any documentation needs updating to reflect these changes.\"}}' }",
+            "statusMessage": "Checking for documentation updates..."
+          }
+        ]
+      }
+    ]
+  }
+}
