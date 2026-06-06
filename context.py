@@ -83,7 +83,7 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
 
             quit()
 
-        context = [prompt_tokens] + memory.copy()
+        context = [prompt_tokens] + copy.deepcopy(memory)
 
         tokens += prompt_tokens
 
