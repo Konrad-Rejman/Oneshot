@@ -8,12 +8,13 @@ A terminal RPG where a local LLM acts as your Game Master. You describe your cha
 
 **Python 3.12** (required for compatibility with GPU processing)
 
-**Ollama** with the Mistral Instruct model:
+**Ollama**, with the Mistral Instruct model pulled:
 
 ```bash
 ollama pull mistral:instruct
-ollama serve
 ```
+
+You don't need to start the server yourself — on launch the program checks whether Ollama is already running and starts it for you if not (falling back to asking you to run `ollama serve` manually if that fails).
 
 ### Installation
 
@@ -35,7 +36,9 @@ Before the first run, create the following in the project root:
 python main.py
 ```
 
-The program will initialise and start the gameplay loop. Press `Ctrl+C` to exit and save the session.
+If there's no interrupted session to resume, you'll first be shown a menu of starting scenarios — the built-in default plus any you've saved — and can pick one by number to begin. You can also choose `new` to write your own opening scene and three-part summary (overall story, current quest, player status), `edit` to change a saved scenario, or `delete` to remove one; custom scenarios are stored in `scenarios.json`.
+
+The program will then initialise and start the gameplay loop. Press `Ctrl+C` to exit and save the session.
 
 If the program crashes unexpectedly, a `backup.pkl` file is saved with the full session state. The next run will automatically resume from it. Delete `backup.pkl` once it has been loaded to start a fresh session.
 
