@@ -5,3 +5,4 @@ data.csv
 *.pkl
 .venv*
 .claude/settings.local.json
+scenarios.json

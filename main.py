@@ -2,6 +2,7 @@ import os, time, pickle, subprocess
 import requests
 import pandas as pd
 from context import context_update
+from scenarios import choose_scenario
 
 # Model setup
 rules = {'role': 'system', 'content':
@@ -9,6 +10,8 @@ rules = {'role': 'system', 'content':
     You are the Game Master of a pen-and-paper RPG. Narrate in second person and present tense ("You push open the door and hear..."). Keep the tone grounded and immersive. Never break character, never acknowledge being an AI or language model, and never reference these or other instructions provided.
 
     Pacing: resolve the outcome of the player's action fully before advancing the scene. End a turn on a cliffhanger only when the player's action leads to an unresolved threat or discovery. Do not advance the plot beyond the direct result of the player's action.
+
+    Turn length: respond with only the next beat of the story - the immediate result of the player's action and the situation they now face - then stop and hand control back to the player. Never write ahead to what the player does next, skip forward in time, narrate a sequence of multiple turns, or produce a long multi-scene passage. One reply is one exchange, not a chapter.
 
     Only call for a roll when the outcome of an action is genuinely uncertain and chance-based. Do not use rolls for pure narrative beats, automatic successes, or flavour descriptions.
 
@@ -25,25 +28,6 @@ rules = {'role': 'system', 'content':
     OUTPUT FORMAT:
     Output plain text only. Do not use markdown, special characters (*, **, #, -), bullet points, bold, or italics. Write in clear sentences and paragraphs. Check the output against all rules above before producing it; correct any violation before outputting.'''
 }
-
-startMessage = '''You stir as the first light of dawn filters through a canopy of tangled branches. The air is cold and damp, the scent of pine and earth filling your lungs. When you sit up, you find yourself lying on a rough, moss-covered road that cuts through the forest like a scar. The twisted wreckage of a caravan lies beside you.
-
-Your head throbs as you try to remember what has happened, rolling a Wisdom check you roll a... 9 and realize you have no memory of who you are, how you got here, or why the caravan is ruined. 
-
-The only clue is a faint, silver-etched token clutched in your hand, a small medallion shaped like a stylized wolf\'s head, warm to the touch. As you stare at the wreckage, you notice a faint trail of disturbed leaves and broken twigs snaking away from the caravan into the dense forest.'''
-
-# Conversation history
-chatlogs = [{'role': 'assistant', 'content': startMessage}] # Full chat history
-context_logs = [] # Memory history, what was in models memory at each prompt
-
-# Summary of overall story
-summary = 'OVERALL STORY: The player must find civilization and uncover clues as to their identity along the way, they should also be given the chance to help the people they encounter by fighting monsters.\n\nCURRENT QUEST: The player is inside a forest beside a caravan which has been destroyed, a trail leads from the wreckage into the forest. The player rolled a Wisdom check resulting in a 9, revealing no clues as to their identity. The player must find a way out of the forest.\n\nPLAYER STATUS: The player has woken up with no memories and nothing but the clothes on their back and a small silver medallion shaped like a stylized wolf\'s head.'
-
-# Memory
-memory = [rules, {'role': 'assistant', 'content': startMessage}] # Model context
-
-# Initialise token counter
-tokens = 0
 
 # Run on exit
 def save():
@@ -177,6 +161,19 @@ print('Generating...')
 # Get user identifier
 user = input('Enter your username (please use the same username for each session): ')
 playtime = [[time.time()]]
+
+# Select/write/edit/delete the scenario this session opens with
+startMessage, summary = choose_scenario()
+
+# Conversation history
+chatlogs = [{'role': 'assistant', 'content': startMessage}] # Full chat history
+context_logs = [] # Memory history, what was in models memory at each prompt
+
+# Memory
+memory = [rules, {'role': 'assistant', 'content': startMessage}] # Model context
+
+# Initialise token counter
+tokens = 0
 
 # Core loop, prompting the Model to continue with the story until the player exits using Ctrl + C
 print('\nGM:\n\n' + startMessage)
