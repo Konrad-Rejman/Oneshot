@@ -151,7 +151,7 @@ if 'backup.pkl' in os.listdir():
 
     # Initiate game loop from backup
     while True:
-        tokens, memory, hierarchical_summary = context_update(chatlogs, context_logs, memory, rules, summary, tokens, save, backup)
+        tokens, memory, summary = context_update(chatlogs, context_logs, memory, rules, summary, tokens, save, backup)
 
 # Game start
 print('Press ctrl + c to exit.')
@@ -178,4 +178,4 @@ tokens = 0
 # Core loop, prompting the Model to continue with the story until the player exits using Ctrl + C
 print('\nGM:\n\n' + startMessage)
 while True:
-    tokens, memory, hierarchical_summary = context_update(chatlogs, context_logs, memory, rules, summary, tokens, save, backup)
+    tokens, memory, summary = context_update(chatlogs, context_logs, memory, rules, summary, tokens, save, backup)

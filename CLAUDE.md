@@ -21,6 +21,7 @@ ollama serve
 - A `data.csv` file with headers `,Session,User,Tokens,Playtime (s)` (for session analytics)
 - Python 3.12 (required for GPU/torch compatibility)
 - spaCy model: `python -m spacy download en_core_web_md`
+- The BERTScore model (`roberta-large`, ~1.4 GB) downloads automatically on the first summary-scoring call of the first session — not at startup
 
 ## Testing
 
@@ -28,11 +29,12 @@ ollama serve
 .venv312\Scripts\python.exe -m pytest tests -q
 ```
 
-The suite (~50 tests, sub-second) covers the deterministic logic only — no Ollama, no spaCy model load (`tests/conftest.py` stubs `spacy` before importing `context`, since `context.py` loads `en_core_web_md` at import time):
+The suite (~60 tests, sub-second) covers the deterministic logic only — no Ollama, no spaCy/BERT model load (`tests/conftest.py` stubs `spacy` before importing `context`, since `scoring.py` — imported by `context.py` — loads `en_core_web_md` at import time; the BERT model loads lazily and is monkeypatched in tests):
 
 - `test_compile.py` — every top-level `.py` file compiles (catches syntax errors without importing `main.py`'s interactive code)
 - `test_context_trim.py` — `_trim_presend` / `_trim_to_memory_budget` / `_estimate_tokens` budget contracts
 - `test_summary.py` — `_parse_sections` / `_build_summary` round-trip, `_classify_exchange` keyword routing (prefix matching: stems like `injur` match "injured"; `heal` matching "healthy" is an accepted trade-off)
+- `test_scoring.py` — composite-score weights (0.6/0.2/0.2), candidate selection argmax, lazy-loading contract (metric helpers monkeypatched; BERT never loaded)
 - `test_rolls.py`, `test_model_prompt.py`, `test_scenarios.py` — roll format, prompt-assembly ordering, scenarios.json file-format CRUD
 
 **A `PostToolUse` hook (`.claude/hooks/run-tests.ps1`, registered in `.claude/settings.json`) runs this suite automatically after every Edit/Write to a project `.py` file and feeds failures back.** If the hook reports a failure after your change, fix the code or — if the behavior change was intentional — update the matching test in the same change. Never disable the hook or delete a test to get past a failure without the user's say-so.
@@ -41,7 +43,6 @@ The suite (~50 tests, sub-second) covers the deterministic logic only — no Oll
 
 The tests deliberately do NOT assert on (see ROADMAP.md):
 - Rules system-prompt text — Phase 1.1 rewrites it
-- Summary candidate scoring (cosine/ROUGE weights) — Phase 1.3 replaces it with BERTScore
 - Interactive menus/UI — Phase 2 reworks them
 - Exact prompt framing in `_build_prompt_from_memory` (only content presence + order) — Phase 3 fine-tuning may change the format
 
@@ -59,7 +60,7 @@ The game runs as a terminal loop where the LLM plays a D&D-style Game Master.
 4. The model receives: `[system rules + rolls] + [hierarchical summary] + [as many recent messages as fit] + [current action]`
 5. Response is streamed from Ollama (`model.py:generate_response`)
 6. The exchange is classified by keyword (`_classify_exchange`) to determine which summary sections it affected; a second model call generates 3 candidate updates for just those sections
-7. The best candidate is selected by a weighted score of cosine similarity (0.5) + ROUGE-1/2/L (0.2 each) against the reference (old summary + last interactions)
+7. The best candidate is selected by `scoring.py:select_best_candidate` — a weighted score of BERTScore-F1 (0.6) + ROUGE-L (0.2) + cosine similarity (0.2) against the reference (old affected summary sections + last two exchanges); falls back to the lexical signals alone if BERTScore fails
 8. **Post-summary trim:** persistent `memory` is trimmed (oldest first) so that next turn's full prompt will fit under 4096 tokens, using the updated summary's actual token cost: `budget = TOKEN_LIMIT - rules_tokens - ROLLS_TOKEN_RESERVE - summary_tokens - ACTION_TOKEN_RESERVE`
 
 **State tracked across turns:**
@@ -78,3 +79,4 @@ The game runs as a terminal loop where the LLM plays a D&D-style Game Master.
 - `model.py`: `MODEL_NAME = "mistral:instruct"`, `OLLAMA_API = "http://localhost:11434/api/generate"`
 - `rolls.py`: `roll_num = 5` — number of D20 rolls per turn
 - `context.py`: `TOKEN_LIMIT = 4096` — maximum estimated tokens per prompt; `ROLLS_TOKEN_RESERVE = 30` — token budget reserved for the rolls message; `ACTION_TOKEN_RESERVE = 200` — token budget reserved for the user's next action in post-summary trim
+- `scoring.py`: `BERTSCORE_MODEL = "roberta-large"` — BERTScore base model (lazy-loaded on first scoring call; must ship safetensors weights — transformers 5.x refuses `.bin` checkpoints on the venv's torch 2.5.1); `BERT_WEIGHT/ROUGE_WEIGHT/COSINE_WEIGHT = 0.6/0.2/0.2` — composite scoring weights

@@ -23,19 +23,15 @@ The summary is currently initialised as a hardcoded string at `main.py:49`, tigh
 - **Selective updates:** classify each turn's exchange as affecting story / quest / status or none (keyword match on quest-resolution and status-change phrases is sufficient); only regenerate the affected section(s) and carry the rest forward unchanged to save tokens and prevent drift in stable sections
 - **Dynamic initialisation (Phase 2 dependency):** once character creation exists, generate the opening `startMessage` and `summary` from the character sheet via a dedicated model call, replacing the hardcoded values at `main.py:38-42` and `main.py:49`
 
-### 1.3 Better Summary Candidate Selection
+### 1.3 Better Summary Candidate Selection — IMPLEMENTED (evaluation pending)
 
-Current scoring: cosine similarity (0.5) + ROUGE-1/2/L (0.2 each) against the old summary + last interactions.
+New scoring method to replace previous scorer — cosine similarity (0.5) + ROUGE-1/2/L (0.2 each) — which measured n-gram overlap and shallow vector similarity, both of which could favour a candidate that copies the reference wording without genuinely capturing what happened.
 
-Weaknesses: ROUGE measures n-gram overlap and misses paraphrase; spaCy cosine similarity is shallow. Both can favour a candidate that copies the reference wording without genuinely capturing what happened.
+Should use **BERTScore** (`bert-score` on PyPI, MIT) instead, with the composite formula `0.6 × BERTScore-F1 + 0.2 × ROUGE-L + 0.2 × cosine` — the existing lexical signals are kept but semantic quality is weighted higher. The reference is the old affected summary section(s) + the last two exchanges. If BERTScore fails at runtime (model unavailable, OOM), scoring falls back to the lexical signals alone rather than ending the session.
 
-Replacement scoring:
+**Divergence from the original plan:** the base model is `roberta-large` (MIT, bert-score's English default). The model is a constant (`scoring.py: BERTSCORE_MODEL`) and is loaded lazily on the first scoring call; CUDA is used automatically when available.
 
-Replace the current scorer with **BERTScore** (`bert-score` on PyPI, MIT, runs on CPU in ~50–100 ms using `microsoft/deberta-xlarge-mnli` as the base model). Score each candidate against the reference (old summary + last two exchanges) and select the highest F1.
-
-Composite formula: `0.6 × BERTScore-F1 + 0.2 × ROUGE-L + 0.2 × cosine` — keeps the existing lexical signals but weights semantic quality higher.
-
-Evaluation before switching: hold out 20 consecutive session turns, run both the current scorer and the new scorer on the same candidates, and compare chosen candidates against a hand-ranked ground truth. Merge only if the new scorer wins on 14/20 turns.
+**Future work — evaluation:** the scorer was swapped in without the originally planned acceptance gate. To validate it retrospectively: hold out 20 consecutive session turns, run both the old and new scorer on the same candidates, and compare chosen candidates against a hand-ranked ground truth. The new scorer should win on at least 14/20 turns; if it does not, revisit the weights or base model. This requires per-turn candidate logging, which does not exist yet.
 
 ---
 

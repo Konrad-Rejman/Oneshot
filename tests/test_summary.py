@@ -1,7 +1,7 @@
 '''Behavior contracts for the hierarchical-summary machinery in context.py:
 section parsing/building and the keyword classification driving selective
-section updates (ROADMAP Phase 1.2). Deliberately does NOT test candidate
-scoring (cosine/ROUGE) — ROADMAP Phase 1.3 replaces it with BERTScore.
+section updates (ROADMAP Phase 1.2). Candidate scoring lives in scoring.py
+and is covered by test_scoring.py.
 '''
 import scenarios
 from context import (

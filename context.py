@@ -1,10 +1,7 @@
 from rolls import rolls
-from rouge_score import rouge_scorer
-from sklearn.metrics.pairwise import cosine_similarity
 from model import generate_response
-import copy, re, spacy
-
-nlp = spacy.load('en_core_web_md')
+from scoring import select_best_candidate
+import copy, re
 
 TOKEN_LIMIT = 4096
 ROLLS_TOKEN_RESERVE = 30
@@ -116,11 +113,6 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
         old_context_logs = copy.deepcopy(context_logs)
         old_memory = copy.deepcopy(memory)
         old_tokens = copy.deepcopy(tokens)
-
-        rouge = rouge_scorer.RougeScorer(
-            ['rouge1', 'rouge2', 'rougeL'],
-            use_stemmer=True
-        )
 
         action = input("\nDescribe the players' actions: ")
 
@@ -234,10 +226,18 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
             else:
                 old_affected_text = hierarchical_summary
 
+            # Scoring reference (ROADMAP 1.3): old affected sections + the
+            # last two exchanges only, so candidates are judged on what just
+            # happened rather than rewarded for echoing older history. The
+            # generation prompt below still sees the full memory.
+            reference_interactions = '\n\n'.join(
+                prompt['content'] for prompt in memory[-4:]
+            )
+
             reference_summary = (
                 old_affected_text
                 + "\n\nLAST INTERACTIONS:\n\n"
-                + last_n_interactions
+                + reference_interactions
             )
 
             section_list = ', '.join(affected_sections)
@@ -285,52 +285,9 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
                         for parsed in candidates
                     ]
 
-                    scores = {
-                        'rouge1': [],
-                        'rouge2': [],
-                        'rougeL': []
-                    }
-
-                    for text in candidate_texts:
-
-                        r = rouge.score(
-                            text,
-                            reference_summary
-                        )
-
-                        for metric in r:
-                            scores[metric].append(
-                                r[metric]
-                            )
-
-                    cos_sim = []
-
-                    cos_reference = nlp(
-                        reference_summary
-                    )
-
-                    for text in candidate_texts:
-
-                        similarity = cosine_similarity(
-                            [cos_reference.vector],
-                            [nlp(text).vector]
-                        )[0][0]
-
-                        cos_sim.append(similarity)
-
-                    overall_scores = [
-
-                        0.5 * cos_sim[i]
-                        + 0.2 * scores['rouge1'][i].fmeasure
-                        + 0.2 * scores['rouge2'][i].fmeasure
-                        + 0.2 * scores['rougeL'][i].fmeasure
-
-                        for i in range(
-                            len(candidates)
-                        )
+                    best = candidates[
+                        select_best_candidate(candidate_texts, reference_summary)
                     ]
-
-                    best = candidates[overall_scores.index(max(overall_scores))]
 
                     if old_sections is not None:
                         merged_sections = dict(old_sections)
