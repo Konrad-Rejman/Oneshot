@@ -1,1 +1,16 @@
-{}
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"W:\\Oneshot\\Oneshot\\.claude\\hooks\\run-tests.ps1\"",
+            "timeout": 120
+          }
+        ]
+      }
+    ]
+  }
+}

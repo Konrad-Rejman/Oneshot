@@ -40,8 +40,36 @@ STATUS_CHANGE_KEYWORDS = [
 def _estimate_tokens(messages):
     return sum(len(msg.get('content', '')) for msg in messages) // 4
 
+def _trim_presend(memory):
+    '''
+    Pre-send safety trim: drop oldest old messages (index 2) until the prompt
+    fits under the token limit. Memory layout: [rules, summary, ...old
+    interactions..., action] — rules, summary and the trailing action are
+    never dropped. Mutates memory in place.
+    '''
+    while _estimate_tokens(memory) > TOKEN_LIMIT and len(memory) > 3:
+        memory.pop(2)
+
+def _trim_to_memory_budget(memory, rules_content, summary_text):
+    '''
+    Post-summary trim: drop oldest messages (index 0) until memory fits the
+    budget left after rules, the rolls reserve, the updated summary and the
+    action reserve. Can empty memory entirely if the budget is negative.
+    Mutates memory in place.
+    '''
+    rules_tokens = len(rules_content) // 4
+    summary_tokens = len(summary_text) // 4
+    memory_budget = TOKEN_LIMIT - rules_tokens - ROLLS_TOKEN_RESERVE - summary_tokens - ACTION_TOKEN_RESERVE
+    while _estimate_tokens(memory) > memory_budget and memory:
+        memory.pop(0)
+
 def _contains_keyword(text, keywords):
-    return any(re.search(r'\b' + re.escape(keyword) + r'\b', text) for keyword in keywords)
+    '''
+    Return True if any keyword appears in text. Keywords may be multi-word
+    phrases ('quest complete') or word stems ('injur', which should match
+    "injured" and "injuries").
+    '''
+    return any(re.search(r'\b' + re.escape(keyword), text) for keyword in keywords)
 
 def _classify_exchange(action, response):
     '''
@@ -125,9 +153,7 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
             )
 
         # Pre-send safety trim: drop oldest old messages until prompt fits under token limit
-        # memory layout: [rules, summary, ...old interactions..., action]
-        while _estimate_tokens(memory) > TOKEN_LIMIT and len(memory) > 3:
-            memory.pop(2)
+        _trim_presend(memory)
 
         try:
             # Response streamed by function
@@ -319,11 +345,7 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
                     print("WARNING: No valid summary candidates contained the required section(s); keeping the previous summary.")
 
         # Post-summary trim: trim persistent memory using updated summary's actual token cost
-        rules_tokens = len(rules['content']) // 4
-        summary_tokens = len(hierarchical_summary) // 4
-        memory_budget = TOKEN_LIMIT - rules_tokens - ROLLS_TOKEN_RESERVE - summary_tokens - ACTION_TOKEN_RESERVE
-        while _estimate_tokens(memory) > memory_budget and memory:
-            memory.pop(0)
+        _trim_to_memory_budget(memory, rules['content'], hierarchical_summary)
 
         context_logs.append(context)
 

@@ -22,6 +22,31 @@ ollama serve
 - Python 3.12 (required for GPU/torch compatibility)
 - spaCy model: `python -m spacy download en_core_web_md`
 
+## Testing
+
+```bash
+.venv312\Scripts\python.exe -m pytest tests -q
+```
+
+The suite (~50 tests, sub-second) covers the deterministic logic only — no Ollama, no spaCy model load (`tests/conftest.py` stubs `spacy` before importing `context`, since `context.py` loads `en_core_web_md` at import time):
+
+- `test_compile.py` — every top-level `.py` file compiles (catches syntax errors without importing `main.py`'s interactive code)
+- `test_context_trim.py` — `_trim_presend` / `_trim_to_memory_budget` / `_estimate_tokens` budget contracts
+- `test_summary.py` — `_parse_sections` / `_build_summary` round-trip, `_classify_exchange` keyword routing (prefix matching: stems like `injur` match "injured"; `heal` matching "healthy" is an accepted trade-off)
+- `test_rolls.py`, `test_model_prompt.py`, `test_scenarios.py` — roll format, prompt-assembly ordering, scenarios.json file-format CRUD
+
+**A `PostToolUse` hook (`.claude/hooks/run-tests.ps1`, registered in `.claude/settings.json`) runs this suite automatically after every Edit/Write to a project `.py` file and feeds failures back.** If the hook reports a failure after your change, fix the code or — if the behavior change was intentional — update the matching test in the same change. Never disable the hook or delete a test to get past a failure without the user's say-so.
+
+**Rule: any intentional behavior change to memory trimming, summary parsing/classification, the keyword lists, prompt assembly, or the scenarios.json format must update the corresponding tests in the same change.**
+
+The tests deliberately do NOT assert on (see ROADMAP.md):
+- Rules system-prompt text — Phase 1.1 rewrites it
+- Summary candidate scoring (cosine/ROUGE weights) — Phase 1.3 replaces it with BERTScore
+- Interactive menus/UI — Phase 2 reworks them
+- Exact prompt framing in `_build_prompt_from_memory` (only content presence + order) — Phase 3 fine-tuning may change the format
+
+When implementing roadmap items, extend the suite to cover the new deterministic logic the same way (pure functions tested directly; Ollama/model calls never invoked).
+
 ## Architecture
 
 The game runs as a terminal loop where the LLM plays a D&D-style Game Master.
@@ -33,8 +58,8 @@ The game runs as a terminal loop where the LLM plays a D&D-style Game Master.
 3. **Pre-send trim:** oldest messages are dropped from the prompt until the estimated token count is under `TOKEN_LIMIT` (4096). Estimation uses `len(content) // 4` per message.
 4. The model receives: `[system rules + rolls] + [hierarchical summary] + [as many recent messages as fit] + [current action]`
 5. Response is streamed from Ollama (`model.py:generate_response`)
-6. A second model call generates 3 candidate updated summaries of the story state
-7. The best summary is selected by a weighted score of cosine similarity (0.5) + ROUGE-1/2/L (0.2 each) against the reference (old summary + last interactions)
+6. The exchange is classified by keyword (`_classify_exchange`) to determine which summary sections it affected; a second model call generates 3 candidate updates for just those sections
+7. The best candidate is selected by a weighted score of cosine similarity (0.5) + ROUGE-1/2/L (0.2 each) against the reference (old summary + last interactions)
 8. **Post-summary trim:** persistent `memory` is trimmed (oldest first) so that next turn's full prompt will fit under 4096 tokens, using the updated summary's actual token cost: `budget = TOKEN_LIMIT - rules_tokens - ROLLS_TOKEN_RESERVE - summary_tokens - ACTION_TOKEN_RESERVE`
 
 **State tracked across turns:**

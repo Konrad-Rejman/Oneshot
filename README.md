@@ -42,6 +42,16 @@ The program will then initialise and start the gameplay loop. Press `Ctrl+C` to 
 
 If the program crashes unexpectedly, a `backup.pkl` file is saved with the full session state. The next run will automatically resume from it. Delete `backup.pkl` once it has been loaded to start a fresh session.
 
+## Testing
+
+```bash
+python -m pytest tests -q
+```
+
+The test suite checks the deterministic game logic — token-budget trimming, summary parsing, the D20 roll format and scenario storage — and runs in under a second. It doesn't need Ollama running or the spaCy model downloaded, so it works before full setup is complete.
+
+When editing the project with Claude Code, a hook runs the suite automatically after every change to a Python file and reports any failures.
+
 ## Credits
 
 By Konrad Rejmanowski
