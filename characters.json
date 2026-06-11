@@ -1,0 +1,16 @@
+{
+  "Akshan": {
+    "name": "Akshan",
+    "race": "Human",
+    "char_class": "Archer",
+    "background": "A scandalous rogue that uses all of his money and time going from tavern to tavern and breaking women's hearts.",
+    "stats": {
+      "Strength": 8,
+      "Dexterity": 9,
+      "Constitution": 7,
+      "Intelligence": 5,
+      "Wisdom": 4,
+      "Charisma": 3
+    }
+  }
+}

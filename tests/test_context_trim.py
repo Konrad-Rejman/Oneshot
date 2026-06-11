@@ -87,6 +87,27 @@ class TestTrimToMemoryBudget:
         assert labels == ['old2', 'old3', 'old4']
         assert _estimate_tokens(memory) <= budget
 
+    def test_character_text_shrinks_budget(self):
+        # Same setup as test_budget_math_drops_oldest_first, but a character
+        # sheet eats 1000 further tokens from the budget: 3000 - 1000 = 2666
+        # remaining, so a second message must also be dropped.
+        rules_content = 'r' * 400      # 100 tokens
+        summary = 's' * 400            # 100 tokens
+        character_text = 'c' * 4000    # 1000 tokens
+        memory = [msg(1000, 'old1'), msg(1000, 'old2'),
+                  msg(1000, 'old3'), msg(1000, 'old4')]
+        _trim_to_memory_budget(memory, rules_content, summary, character_text)
+        labels = [m['content'].rstrip('x') for m in memory]
+        assert labels == ['old3', 'old4']
+
+    def test_character_text_defaults_to_empty(self):
+        # Omitting character_text must behave exactly like passing ''.
+        memory_default = [msg(1000, 'old1'), msg(1000, 'old2')]
+        memory_explicit = [msg(1000, 'old1'), msg(1000, 'old2')]
+        _trim_to_memory_budget(memory_default, 'r' * 400, 's' * 400)
+        _trim_to_memory_budget(memory_explicit, 'r' * 400, 's' * 400, '')
+        assert memory_default == memory_explicit
+
     def test_noop_within_budget(self):
         memory = [msg(10, 'old1'), msg(10, 'old2')]
         _trim_to_memory_budget(memory, 'r' * 400, 's' * 400)

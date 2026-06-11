@@ -36,6 +36,7 @@ The suite (~60 tests, sub-second) covers the deterministic logic only — no Oll
 - `test_summary.py` — `_parse_sections` / `_build_summary` round-trip, `_classify_exchange` keyword routing (prefix matching: stems like `injur` match "injured"; `heal` matching "healthy" is an accepted trade-off)
 - `test_scoring.py` — composite-score weights (0.6/0.2/0.2), candidate selection argmax, lazy-loading contract (metric helpers monkeypatched; BERT never loaded)
 - `test_rolls.py`, `test_model_prompt.py`, `test_scenarios.py` — roll format, prompt-assembly ordering, scenarios.json file-format CRUD
+- `test_character.py` — `Character` stat validation, dict round-trip, characters.json file-format CRUD, `describe_stat` phrase mapping, `to_prompt` content presence
 
 **A `PostToolUse` hook (`.claude/hooks/run-tests.ps1`, registered in `.claude/settings.json`) runs this suite automatically after every Edit/Write to a project `.py` file and feeds failures back.** If the hook reports a failure after your change, fix the code or — if the behavior change was intentional — update the matching test in the same change. Never disable the hook or delete a test to get past a failure without the user's say-so.
 
@@ -55,13 +56,13 @@ The game runs as a terminal loop where the LLM plays a D&D-style Game Master.
 **Data flow per turn** (`context.py:context_update`):
 
 1. User inputs their action
-2. 5 pre-generated D20 rolls (`rolls.py`) are appended to the system prompt so the model uses them instead of hallucinating numbers
+2. 5 pre-generated D20 rolls (`rolls.py`) and the character sheet (`character.py:Character.to_prompt`) are appended to the system prompt — the rolls so the model uses them instead of hallucinating numbers, the sheet so the model judges actions through the character's stats (D&D six on a clean 1-10 scale, no modifiers; a relevant stat of 8+ shifts the roll's consequence tier up by one, 3- shifts it down, naturals never shift)
 3. **Pre-send trim:** oldest messages are dropped from the prompt until the estimated token count is under `TOKEN_LIMIT` (4096). Estimation uses `len(content) // 4` per message.
 4. The model receives: `[system rules + rolls] + [hierarchical summary] + [as many recent messages as fit] + [current action]`
 5. Response is streamed from Ollama (`model.py:generate_response`)
 6. The exchange is classified by keyword (`_classify_exchange`) to determine which summary sections it affected; a second model call generates 3 candidate updates for just those sections
 7. The best candidate is selected by `scoring.py:select_best_candidate` — a weighted score of BERTScore-F1 (0.6) + ROUGE-L (0.2) + cosine similarity (0.2) against the reference (old affected summary sections + last two exchanges); falls back to the lexical signals alone if BERTScore fails
-8. **Post-summary trim:** persistent `memory` is trimmed (oldest first) so that next turn's full prompt will fit under 4096 tokens, using the updated summary's actual token cost: `budget = TOKEN_LIMIT - rules_tokens - ROLLS_TOKEN_RESERVE - summary_tokens - ACTION_TOKEN_RESERVE`
+8. **Post-summary trim:** persistent `memory` is trimmed (oldest first) so that next turn's full prompt will fit under 4096 tokens, using the updated summary's actual token cost: `budget = TOKEN_LIMIT - rules_tokens - character_tokens - ROLLS_TOKEN_RESERVE - summary_tokens - ACTION_TOKEN_RESERVE`
 
 **State tracked across turns:**
 - `chatlogs` — full conversation history (written to file on exit)
@@ -69,6 +70,7 @@ The game runs as a terminal loop where the LLM plays a D&D-style Game Master.
 - `hierarchical_summary` — compressed story state string with sections OVERALL STORY / CURRENT QUEST / PLAYER STATUS
 - `context_logs` — what was in memory at each prompt (for debugging/analysis)
 - `tokens` — cumulative prompt token count from Ollama's `prompt_eval_count`
+- `character` — the `character.py:Character` dataclass being played (chosen/created at startup via `choose_character()`, saved as a dict in `backup.pkl` and in `characters.json` for custom characters)
 
 **Session persistence:**
 - Clean exit (Ctrl+C): saves transcript + context logs to `sessions/<number>/`, appends row to `data.csv`
@@ -78,5 +80,6 @@ The game runs as a terminal loop where the LLM plays a D&D-style Game Master.
 
 - `model.py`: `MODEL_NAME = "mistral:instruct"`, `OLLAMA_API = "http://localhost:11434/api/generate"`
 - `rolls.py`: `roll_num = 5` — number of D20 rolls per turn
+- `character.py`: `STAT_NAMES` — the six stats (Strength/Dexterity/Constitution/Intelligence/Wisdom/Charisma); `STAT_MIN/STAT_MAX = 1/10` — clean stat scale, no modifiers; `STAT_POOL = 36` — point pool for interactive stat allocation
 - `context.py`: `TOKEN_LIMIT = 4096` — maximum estimated tokens per prompt; `ROLLS_TOKEN_RESERVE = 30` — token budget reserved for the rolls message; `ACTION_TOKEN_RESERVE = 200` — token budget reserved for the user's next action in post-summary trim
 - `scoring.py`: `BERTSCORE_MODEL = "roberta-large"` — BERTScore base model (lazy-loaded on first scoring call; must ship safetensors weights — transformers 5.x refuses `.bin` checkpoints on the venv's torch 2.5.1); `BERT_WEIGHT/ROUGE_WEIGHT/COSINE_WEIGHT = 0.6/0.2/0.2` — composite scoring weights

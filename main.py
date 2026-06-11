@@ -3,6 +3,7 @@ import requests
 import pandas as pd
 from context import context_update
 from scenarios import choose_scenario
+from character import choose_character, Character, DEFAULT_CHARACTER
 
 # Model setup
 rules = {'role': 'system', 'content':
@@ -24,6 +25,9 @@ rules = {'role': 'system', 'content':
     11-15: Partial success. The action succeeds with a minor complication or limitation.
     16-20: Full success. The action succeeds cleanly.
     Natural 20: Full success with a narrative bonus or exceptional outcome.
+
+    CHARACTER:
+    The system message contains a CHARACTER SHEET describing the player character, with six stats rated 1 to 10, where 5 is an average person and 10 is peak mortal ability. When the player attempts an action, judge it through the most relevant stat, and name that stat when you call for a roll ("Roll a Dexterity check..."). If the relevant stat is 8 or higher, treat the roll result as one consequence tier better; if it is 3 or lower, treat it as one tier worse. Never shift a natural 20 or natural 1. Let the character's race, class and background inform what they can plausibly know or attempt, and weave their listed traits into the narration where natural.
 
     OUTPUT FORMAT:
     Output plain text only. Do not use markdown, special characters (*, **, #, -), bullet points, bold, or italics. Write in clear sentences and paragraphs. Check the output against all rules above before producing it; correct any violation before outputting.'''
@@ -109,7 +113,8 @@ def backup(chatlogs, context_logs, memory, tokens):
         'Tokens': tokens,
         'Playtime': playtime,
         'Memory': memory,
-        'Summary': summary
+        'Summary': summary,
+        'Character': character.to_dict()
     }
     pickle.dump(backup_data, open('backup.pkl', 'wb'))
 
@@ -148,10 +153,13 @@ if 'backup.pkl' in os.listdir():
     playtime.append([time.time()]) # Add current session starttime
     memory = backup_data['Memory']
     summary = backup_data['Summary']
+    # Backups from before the character system carry no sheet; fall back to the default
+    character_data = backup_data.get('Character')
+    character = Character.from_dict(character_data) if character_data else DEFAULT_CHARACTER
 
     # Initiate game loop from backup
     while True:
-        tokens, memory, summary = context_update(chatlogs, context_logs, memory, rules, summary, tokens, save, backup)
+        tokens, memory, summary = context_update(chatlogs, context_logs, memory, rules, summary, tokens, save, backup, character)
 
 # Game start
 print('Press ctrl + c to exit.')
@@ -164,6 +172,9 @@ playtime = [[time.time()]]
 
 # Select/write/edit/delete the scenario this session opens with
 startMessage, summary = choose_scenario()
+
+# Select/create/delete the character this session is played as
+character = choose_character()
 
 # Conversation history
 chatlogs = [{'role': 'assistant', 'content': startMessage}] # Full chat history
@@ -178,4 +189,4 @@ tokens = 0
 # Core loop, prompting the Model to continue with the story until the player exits using Ctrl + C
 print('\nGM:\n\n' + startMessage)
 while True:
-    tokens, memory, summary = context_update(chatlogs, context_logs, memory, rules, summary, tokens, save, backup)
+    tokens, memory, summary = context_update(chatlogs, context_logs, memory, rules, summary, tokens, save, backup, character)

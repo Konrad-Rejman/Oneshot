@@ -47,16 +47,17 @@ def _trim_presend(memory):
     while _estimate_tokens(memory) > TOKEN_LIMIT and len(memory) > 3:
         memory.pop(2)
 
-def _trim_to_memory_budget(memory, rules_content, summary_text):
+def _trim_to_memory_budget(memory, rules_content, summary_text, character_text=''):
     '''
     Post-summary trim: drop oldest messages (index 0) until memory fits the
-    budget left after rules, the rolls reserve, the updated summary and the
-    action reserve. Can empty memory entirely if the budget is negative.
-    Mutates memory in place.
+    budget left after rules, the character sheet, the rolls reserve, the
+    updated summary and the action reserve. Can empty memory entirely if the
+    budget is negative. Mutates memory in place.
     '''
     rules_tokens = len(rules_content) // 4
+    character_tokens = len(character_text) // 4
     summary_tokens = len(summary_text) // 4
-    memory_budget = TOKEN_LIMIT - rules_tokens - ROLLS_TOKEN_RESERVE - summary_tokens - ACTION_TOKEN_RESERVE
+    memory_budget = TOKEN_LIMIT - rules_tokens - character_tokens - ROLLS_TOKEN_RESERVE - summary_tokens - ACTION_TOKEN_RESERVE
     while _estimate_tokens(memory) > memory_budget and memory:
         memory.pop(0)
 
@@ -106,7 +107,7 @@ def _parse_sections(text):
 def _build_summary(sections):
     return '\n\n'.join(f'{header}: {sections[header]}' for header in SECTION_HEADERS)
 
-def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, tokens, save, backup):
+def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, tokens, save, backup, character=None):
 
     try:
         old_chatlogs = copy.deepcopy(chatlogs)
@@ -122,9 +123,13 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
         })
 
         rolls_message = rolls()
+        # Character sheet appended to the system prompt each turn (like the
+        # rolls) so trims can never drop it; tokens are accounted for in the
+        # post-summary budget below.
+        character_text = '\n\n' + character.to_prompt() if character else ''
         # Preserve original rules content so we can restore it later
         original_rules_content = rules['content']
-        rules['content'] = original_rules_content + rolls_message
+        rules['content'] = original_rules_content + character_text + rolls_message
 
         if memory[0] == rules:
 
@@ -302,7 +307,7 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
                     print("WARNING: No valid summary candidates contained the required section(s); keeping the previous summary.")
 
         # Post-summary trim: trim persistent memory using updated summary's actual token cost
-        _trim_to_memory_budget(memory, rules['content'], hierarchical_summary)
+        _trim_to_memory_budget(memory, rules['content'], hierarchical_summary, character_text)
 
         context_logs.append(context)
 
