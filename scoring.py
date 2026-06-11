@@ -28,6 +28,13 @@ def _get_bert_scorer():
     '''
     global _bert_scorer
     if _bert_scorer is None:
+        # Silence transformers' weight-loading progress bar and LOAD REPORT.
+        # The reported key mismatches are expected: the checkpoint is an MLM
+        # model (extra lm_head.*) while BERTScore uses the bare encoder and
+        # never touches the freshly-initialised pooler.* weights.
+        from transformers.utils import logging as hf_logging
+        hf_logging.set_verbosity_error()
+        hf_logging.disable_progress_bar()
         from bert_score import BERTScorer
         _bert_scorer = BERTScorer(model_type=BERTSCORE_MODEL)
     return _bert_scorer
