@@ -4,6 +4,7 @@ import pandas as pd
 from context import context_update
 from scenarios import choose_scenario
 from character import choose_character, Character, DEFAULT_CHARACTER
+from saves import choose_save, prompt_session_save, prompt_transcript_export, format_transcript_text
 
 # Model setup
 rules = {'role': 'system', 'content':
@@ -33,6 +34,30 @@ rules = {'role': 'system', 'content':
     Output plain text only. Do not use markdown, special characters (*, **, #, -), bullet points, bold, or italics. Write in clear sentences and paragraphs. Check the output against all rules above before producing it; correct any violation before outputting.'''
 }
 
+# Session state persisted across runs: written to backup.pkl on a crash and
+# to a named save slot (saves.py, as JSON) when the player keeps the story.
+# Both restore through restore_session(), so the keys must stay in sync.
+def session_state(chatlogs, context_logs, memory, tokens, summary, character):
+    return {
+        'User': user,
+        'Chat Logs': chatlogs,
+        'Context Logs': context_logs,
+        'Tokens': tokens,
+        'Playtime': playtime,
+        'Memory': memory,
+        'Summary': summary,
+        'Character': character.to_dict()
+    }
+
+# Unpack persisted session state (backup.pkl or a named save slot) into the
+# game-loop variables.
+def restore_session(data):
+    # Saves from before the character system carry no sheet; fall back to the default
+    character_data = data.get('Character')
+    character = Character.from_dict(character_data) if character_data else DEFAULT_CHARACTER
+    return (data['User'], data['Chat Logs'], data['Context Logs'], data['Tokens'],
+            data['Playtime'], data['Memory'], data['Summary'], character)
+
 # Run on exit
 def save():
     # Save session info
@@ -50,13 +75,8 @@ def save():
 
     # Write a file containing the session chatlogs
     with open(file_path, 'w', encoding='utf-8') as file:
-        for prompt in chatlogs:
-            txt = prompt.get('content')
-            if prompt.get('role') == 'system' or prompt.get('role') == 'assistant':
-                file.write('GM:\n\n' + txt + '\n\n')
-            elif prompt.get('role') == 'user':
-                file.write('PLAYER:\n\n' + txt + '\n\n')
-    
+        file.write(format_transcript_text(chatlogs))
+
     # Construct contextlogs file name
     file_name = str(file_number) + '_' + user + '_' + 'Context_Logs'
     file_path = os.path.join(folder_name, file_name + '.txt')
@@ -100,22 +120,23 @@ def save():
     df = pd.concat([df, new_row])
     df.to_csv('data.csv')
 
+    # Offer to keep the story in a named save slot (loadable from the startup
+    # menu) and to export the transcript as plain text or Markdown. A second
+    # Ctrl+C here just skips the offers - the session files are already written.
+    try:
+        state = session_state(chatlogs, context_logs, memory, tokens, summary, character)
+        slot_name = prompt_session_save(state)
+        prompt_transcript_export(chatlogs, slot_name if slot_name else file_name)
+    except KeyboardInterrupt:
+        pass
+
 # Backup function, run if session is interrupted unexpectedly
 def backup(chatlogs, context_logs, memory, tokens):
     # Adjust playtime
     playtime[-1].append(time.time()) # Add current time as endtime to last session
 
     # Save backup data
-    backup_data = {
-        'User': user,
-        'Chat Logs': chatlogs,
-        'Context Logs': context_logs,
-        'Tokens': tokens,
-        'Playtime': playtime,
-        'Memory': memory,
-        'Summary': summary,
-        'Character': character.to_dict()
-    }
+    backup_data = session_state(chatlogs, context_logs, memory, tokens, summary, character)
     pickle.dump(backup_data, open('backup.pkl', 'wb'))
 
 # Check that ollama is running
@@ -144,49 +165,51 @@ except Exception:
 if 'backup.pkl' in os.listdir():
     # Load backup data
     backup_data = pickle.load(open('backup.pkl', 'rb'))
-
-    user = backup_data['User']
-    chatlogs = backup_data['Chat Logs']
-    context_logs = backup_data['Context Logs']
-    tokens = backup_data['Tokens']
-    playtime = backup_data['Playtime']
+    user, chatlogs, context_logs, tokens, playtime, memory, summary, character = restore_session(backup_data)
     playtime.append([time.time()]) # Add current session starttime
-    memory = backup_data['Memory']
-    summary = backup_data['Summary']
-    # Backups from before the character system carry no sheet; fall back to the default
-    character_data = backup_data.get('Character')
-    character = Character.from_dict(character_data) if character_data else DEFAULT_CHARACTER
 
-    # Initiate game loop from backup
-    while True:
-        tokens, memory, summary = context_update(chatlogs, context_logs, memory, rules, summary, tokens, save, backup, character)
+else:
+    # Game start
+    print('Press ctrl + c to exit.')
+    print('The LLM will act as the Game Master (GM), play along by inputing your characters actions each turn and the LLM will respond with the outcome setting up the next turn.')
 
-# Game start
-print('Press ctrl + c to exit.')
-print('The LLM will act as the Game Master (GM), play along by inputing your characters actions each turn and the LLM will respond with the outcome setting up the next turn.')
-print('Generating...')
+    # Get user identifier
+    user = input('Enter your username (please use the same username for each session): ')
 
-# Get user identifier
-user = input('Enter your username (please use the same username for each session): ')
-playtime = [[time.time()]]
+    # Continue a named saved story, or start a new one (menu skipped when no saves exist)
+    saved_state = choose_save()
 
-# Select/write/edit/delete the scenario this session opens with
-startMessage, summary = choose_scenario()
+    if saved_state is not None:
+        user, chatlogs, context_logs, tokens, playtime, memory, summary, character = restore_session(saved_state)
+        playtime.append([time.time()]) # Add current session starttime
 
-# Select/create/delete the character this session is played as
-character = choose_character()
+        # Re-print the last GM message so the player remembers where the story left off
+        last_gm = next((msg['content'] for msg in reversed(chatlogs) if msg.get('role') == 'assistant'), None)
+        if last_gm:
+            print('\nGM:\n\n' + last_gm)
 
-# Conversation history
-chatlogs = [{'role': 'assistant', 'content': startMessage}] # Full chat history
-context_logs = [] # Memory history, what was in models memory at each prompt
+    else:
+        print('Generating...')
+        playtime = [[time.time()]]
 
-# Memory
-memory = [rules, {'role': 'assistant', 'content': startMessage}] # Model context
+        # Select/write/edit/delete the scenario this session opens with
+        startMessage, summary = choose_scenario()
 
-# Initialise token counter
-tokens = 0
+        # Select/create/delete the character this session is played as
+        character = choose_character()
+
+        # Conversation history
+        chatlogs = [{'role': 'assistant', 'content': startMessage}] # Full chat history
+        context_logs = [] # Memory history, what was in models memory at each prompt
+
+        # Memory
+        memory = [rules, {'role': 'assistant', 'content': startMessage}] # Model context
+
+        # Initialise token counter
+        tokens = 0
+
+        print('\nGM:\n\n' + startMessage)
 
 # Core loop, prompting the Model to continue with the story until the player exits using Ctrl + C
-print('\nGM:\n\n' + startMessage)
 while True:
     tokens, memory, summary = context_update(chatlogs, context_logs, memory, rules, summary, tokens, save, backup, character)

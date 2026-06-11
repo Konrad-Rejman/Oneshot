@@ -6,22 +6,25 @@ Planned improvements in rough priority order.
 
 ## Phase 1 — Core LLM Quality
 
-### 1.1 Revise the Rules System Prompt
+### 1.1 Revise the Rules System Prompt — IMPLEMENTED
 
-The current rules message (`main.py:7-36`) needs the following changes:
+The rules message (`main.py:rules`) now contains all the planned changes:
 
-- Expand the GM persona definition to specify tone (second-person, present tense, grounded), pacing (when to end a turn on a cliffhanger vs. resolve fully), and the threshold for calling a roll (chance-based actions only, not pure narrative beats)
-- Rewrite the dice system rules to be unambiguous: the model receives exactly 5 pre-rolled D20s appended to the system message, must consume them left-to-right, one per roll, and must not invent or paraphrase numbers
-- Add a consequence-scaling rule: a roll of 1–5 is a critical failure with a setback, 6–10 is a partial failure, 11–15 is a partial success, 16–20 is a full success, and a natural 20 has a narrative bonus
-- Split the prompt into three labelled sections — `PERSONA`, `DICE SYSTEM`, `OUTPUT FORMAT` — so individual rules can be edited and tested in isolation
+- The GM persona specifies tone (second-person, present tense, grounded), pacing (resolve the action fully, cliffhangers only on unresolved threats, one beat per reply), and the roll threshold (chance-based actions only, not pure narrative beats)
+- The dice system rules are unambiguous: exactly 5 pre-rolled D20s in the system message, consumed left-to-right, one per roll, never invented or paraphrased, never mentioned to the player
+- Consequence scaling: 1–5 critical failure with a setback, 6–10 partial failure, 11–15 partial success, 16–20 full success, natural 20 narrative bonus
+- The prompt is split into labelled sections — `PERSONA`, `DICE SYSTEM`, `OUTPUT FORMAT`, plus a `CHARACTER` section added by Phase 2.1 (stat-based consequence-tier shifts: a relevant stat of 8+ shifts one tier up, 3- one tier down, naturals never shift)
 
-### 1.2 Improve Hierarchical Summary Initialisation and Update Logic
+Tests deliberately do not assert on the prompt wording (see Testing notes in CLAUDE.md), so it can be iterated freely; Phase 3 fine-tuning must keep the production prompt in sync with the training data.
 
-The summary is currently initialised as a hardcoded string at `main.py:49`, tightly coupled to the fixed opening scene (`startMessage`). Both will need to become dynamic once character creation is introduced (Phase 2), but improvements to the update logic are also needed:
+### 1.2 Improve Hierarchical Summary Initialisation and Update Logic — IMPLEMENTED (dynamic initialisation pending)
 
-- **Update prompt:** add explicit section anchors to the candidate-generation prompt so the model is required to output all three sections (`OVERALL STORY`, `CURRENT QUEST`, `PLAYER STATUS`) in every candidate; candidates missing a section are discarded before scoring
-- **Selective updates:** classify each turn's exchange as affecting story / quest / status or none (keyword match on quest-resolution and status-change phrases is sufficient); only regenerate the affected section(s) and carry the rest forward unchanged to save tokens and prevent drift in stable sections
-- **Dynamic initialisation (Phase 2 dependency):** once character creation exists, generate the opening `startMessage` and `summary` from the character sheet via a dedicated model call, replacing the hardcoded values at `main.py:38-42` and `main.py:49`
+The update logic now works as planned (`context.py`):
+
+- **Update prompt:** the candidate-generation prompt names the exact section heading(s) the model must output; candidates missing a required section are discarded before scoring (`_parse_requested_sections` returning None filters them out), and if no candidate survives, the previous summary is kept rather than corrupted
+- **Selective updates:** each turn's exchange is classified by keyword match (`_classify_exchange`, `QUEST_RESOLUTION_KEYWORDS` / `STATUS_CHANGE_KEYWORDS`) as affecting story / quest / status or none; only the affected section(s) are regenerated and merged into the carried-forward summary. A summary that doesn't parse into the three sections (e.g. a hand-written scenario summary) falls back to whole-summary regeneration.
+
+**Remaining work — dynamic initialisation:** the hardcoded `startMessage`/`summary` were replaced by the scenario picker (`scenarios.py:choose_scenario`, with the original opening kept as the always-available Default), but the originally planned model call that generates an opening scene and summary from the character sheet does not exist yet. When added, it should feed `add_scenario()` so generated openings become saved scenarios like hand-written ones.
 
 ### 1.3 Better Summary Candidate Selection — IMPLEMENTED (evaluation pending)
 
@@ -46,13 +49,13 @@ Replace the hardcoded opening scene with a structured character creation flow at
 - Brief backstory prompt used to dynamically generate both `startMessage` and the initial `summary` via a model call, replacing the hardcoded values in `main.py:38-42/49`
 - Character sheet stored as a dataclass and serialised alongside session state
 
-### 2.2 Story Saving and Loading
+### 2.2 Story Saving and Loading — IMPLEMENTED
 
-Extend the existing session persistence (`main.py:58–122`):
+Extends the existing session persistence (`saves.py` + `main.py`):
 
-- Named save slots rather than only numbered session directories
-- Load a named previous session at startup alongside the existing `backup.pkl` resume flow
-- Export session transcript as formatted plain text or Markdown
+- **Named save slots:** on clean exit (Ctrl+C) the player is offered a named slot; each slot is one JSON file in `saves/` carrying the same state keys as `backup.pkl` plus `Version`/`Name`. Phase 2.3 state (HP, inventory, XP) should be added as new keys with a `SAVE_VERSION` bump, keeping old saves loadable.
+- **Load at startup:** when saves exist, a startup menu (`saves.py:choose_save`) lists them most-recent-first to continue, export, or delete; `backup.pkl` crash-resume still takes priority and both restore through the same `main.py:restore_session` path.
+- **Transcript export:** plain text (`format_transcript_text`, the same format the `sessions/` files use) or Markdown (`format_transcript_markdown`), written to `exports/`, offered on exit and from the startup menu.
 
 ### 2.3 Character Stats and Progression
 

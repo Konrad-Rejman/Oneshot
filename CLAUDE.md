@@ -37,6 +37,7 @@ The suite (~60 tests, sub-second) covers the deterministic logic only — no Oll
 - `test_scoring.py` — composite-score weights (0.6/0.2/0.2), candidate selection argmax, lazy-loading contract (metric helpers monkeypatched; BERT never loaded)
 - `test_rolls.py`, `test_model_prompt.py`, `test_scenarios.py` — roll format, prompt-assembly ordering, scenarios.json file-format CRUD
 - `test_character.py` — `Character` stat validation, dict round-trip, characters.json file-format CRUD, `describe_stat` phrase mapping, `to_prompt` content presence
+- `test_saves.py` — save-name sanitisation, `saves/` slot file-format CRUD (state keys + `Version`/`Name` metadata round-trip), transcript text formatting, export writing
 
 **A `PostToolUse` hook (`.claude/hooks/run-tests.ps1`, registered in `.claude/settings.json`) runs this suite automatically after every Edit/Write to a project `.py` file and feeds failures back.** If the hook reports a failure after your change, fix the code or — if the behavior change was intentional — update the matching test in the same change. Never disable the hook or delete a test to get past a failure without the user's say-so.
 
@@ -73,8 +74,9 @@ The game runs as a terminal loop where the LLM plays a D&D-style Game Master.
 - `character` — the `character.py:Character` dataclass being played (chosen/created at startup via `choose_character()`, saved as a dict in `backup.pkl` and in `characters.json` for custom characters)
 
 **Session persistence:**
-- Clean exit (Ctrl+C): saves transcript + context logs to `sessions/<number>/`, appends row to `data.csv`
-- Unexpected crash: writes `backup.pkl` with full state; on next launch `main.py` detects this file and resumes the interrupted session. Delete `backup.pkl` manually after the data has been loaded.
+- Clean exit (Ctrl+C): saves transcript + context logs to `sessions/<number>/`, appends row to `data.csv`, then offers a named save slot and a transcript export (plain text or Markdown, written to `exports/`)
+- Named save slots (`saves.py`): one JSON file per slot in `saves/`, holding the same state keys as `backup.pkl` (built by `main.py:session_state`) plus `Version`/`Name` metadata; when saves exist, a startup menu (`choose_save()`) lists them most-recent-first to continue, export, or delete. Loading goes through `main.py:restore_session`, shared with the backup-resume flow.
+- Unexpected crash: writes `backup.pkl` with full state; on next launch `main.py` detects this file and resumes the interrupted session (takes priority over the save-slot menu). Delete `backup.pkl` manually after the data has been loaded.
 
 ## Key Constants
 
@@ -83,3 +85,4 @@ The game runs as a terminal loop where the LLM plays a D&D-style Game Master.
 - `character.py`: `STAT_NAMES` — the six stats (Strength/Dexterity/Constitution/Intelligence/Wisdom/Charisma); `STAT_MIN/STAT_MAX = 1/10` — clean stat scale, no modifiers; `STAT_POOL = 36` — point pool for interactive stat allocation
 - `context.py`: `TOKEN_LIMIT = 4096` — maximum estimated tokens per prompt; `ROLLS_TOKEN_RESERVE = 30` — token budget reserved for the rolls message; `ACTION_TOKEN_RESERVE = 200` — token budget reserved for the user's next action in post-summary trim
 - `scoring.py`: `BERTSCORE_MODEL = "roberta-large"` — BERTScore base model (lazy-loaded on first scoring call; must ship safetensors weights — transformers 5.x refuses `.bin` checkpoints on the venv's torch 2.5.1); `BERT_WEIGHT/ROUGE_WEIGHT/COSINE_WEIGHT = 0.6/0.2/0.2` — composite scoring weights
+- `saves.py`: `SAVES_DIR = "saves"` / `EXPORTS_DIR = "exports"` — both created on demand, no setup needed; `SAVE_VERSION = 1` — save-format version written into each slot (bump when Phase 2.3 adds progression state); `EXPORT_FORMATS = ['txt', 'md']`

@@ -23,6 +23,8 @@ pip install -r requirements.txt
 python -m spacy download en_core_web_md
 ```
 
+The first time a session scores a summary update, a ~1.4 GB BERTScore model (`roberta-large`) is downloaded automatically — a one-time wait during play, not a setup step.
+
 ### Additional Files / Directories
 
 Before the first run, create the following in the project root:
@@ -36,9 +38,13 @@ Before the first run, create the following in the project root:
 python main.py
 ```
 
-If there's no interrupted session to resume, you'll first be shown a menu of starting scenarios — the built-in default plus any you've saved — and can pick one by number to begin. You can also choose `new` to write your own opening scene and three-part summary (overall story, current quest, player status), `edit` to change a saved scenario, or `delete` to remove one; custom scenarios are stored in `scenarios.json`.
+If there's no interrupted session to resume, you'll be asked for a username and then — when you have saved stories — shown a menu of them, newest first: pick one by number to continue where it left off (the GM's last message is re-printed to remind you), or choose `new` to start a fresh story, `export` to write a saved story's transcript to a file, or `delete` to remove a save.
 
-The program will then initialise and start the gameplay loop. Press `Ctrl+C` to exit and save the session.
+When starting a new story you'll be shown a menu of starting scenarios — the built-in default plus any you've saved — and can pick one by number to begin. You can also choose `new` to write your own opening scene and three-part summary (overall story, current quest, player status), `edit` to change a saved scenario, or `delete` to remove one; custom scenarios are stored in `scenarios.json`.
+
+Next you'll pick the character to play as — the built-in default or one of your own. Choose `new` to create a character (name, race, class, background) and assign its six ability scores from a shared point pool, or `delete` to remove one; custom characters are stored in `characters.json`. The GM reads the character sheet every turn, so your stats shape how actions play out.
+
+The program will then initialise and start the gameplay loop. Press `Ctrl+C` to exit and save the session. On exit you can also keep the story in a named save slot — stored in `saves/` and offered in the saved-stories menu next time — and export the session transcript as plain text or Markdown into `exports/` (both folders are created automatically).
 
 If the program crashes unexpectedly, a `backup.pkl` file is saved with the full session state. The next run will automatically resume from it. Delete `backup.pkl` once it has been loaded to start a fresh session.
 
@@ -48,7 +54,7 @@ If the program crashes unexpectedly, a `backup.pkl` file is saved with the full 
 python -m pytest tests -q
 ```
 
-The test suite checks the deterministic game logic — token-budget trimming, summary parsing, the D20 roll format and scenario storage — and runs in under a second. It doesn't need Ollama running or the spaCy model downloaded, so it works before full setup is complete.
+The test suite checks the deterministic game logic — token-budget trimming, summary parsing and candidate scoring, the D20 roll format, character validation, and the scenario, character and save-slot storage formats — and runs in under a second. It doesn't need Ollama running or the spaCy/BERTScore models downloaded, so it works before full setup is complete.
 
 When editing the project with Claude Code, a hook runs the suite automatically after every change to a Python file and reports any failures.
 
