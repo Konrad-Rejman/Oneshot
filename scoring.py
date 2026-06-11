@@ -35,6 +35,12 @@ def _get_bert_scorer():
         from transformers.utils import logging as hf_logging
         hf_logging.set_verbosity_error()
         hf_logging.disable_progress_bar()
+        # huggingface_hub has its own logger tree the transformers setting
+        # does not cover; it relays server-sent X-HF-Warning headers (e.g.
+        # "You are sending unauthenticated requests to the HF Hub") when the
+        # model is checked against the Hub.
+        from huggingface_hub.utils import logging as hub_logging
+        hub_logging.set_verbosity_error()
         from bert_score import BERTScorer
         _bert_scorer = BERTScorer(model_type=BERTSCORE_MODEL)
     return _bert_scorer

@@ -6,11 +6,17 @@ import copy, re
 TOKEN_LIMIT = 4096
 ROLLS_TOKEN_RESERVE = 30
 ACTION_TOKEN_RESERVE = 200
+SUMMARY_UPDATE_INTERVAL = 5
 
 SECTION_HEADERS = ['OVERALL STORY', 'CURRENT QUEST', 'PLAYER STATUS']
 
+# Header matching is deliberately tolerant of markdown decoration
+# ("**CURRENT QUEST**:", "## CURRENT QUEST:") because the summariser model
+# adds it despite being told not to; [\s*_]* allows decoration between the
+# header and its colon, and the lookahead allows it before the next header.
 _SECTION_PATTERN = re.compile(
-    r'(OVERALL STORY|CURRENT QUEST|PLAYER STATUS)\s*:\s*(.*?)(?=(?:OVERALL STORY|CURRENT QUEST|PLAYER STATUS)\s*:|\Z)',
+    r'(OVERALL STORY|CURRENT QUEST|PLAYER STATUS)[\s*_]*:\s*(.*?)'
+    r'(?=[\s*_#]*(?:OVERALL STORY|CURRENT QUEST|PLAYER STATUS)[\s*_]*:|\Z)',
     re.IGNORECASE | re.DOTALL
 )
 
@@ -86,20 +92,60 @@ def _classify_exchange(action, response):
 
     return affected
 
-def _parse_requested_sections(text, headers):
+def _clean_body(body):
     '''
-    Extract the given section headers from text as {header: body}.
-    Returns None if any requested header is missing.
+    Strip stray markdown decoration and whitespace from the edges of a
+    section body; inner formatting is left alone.
+    '''
+    return re.sub(r'^[\s*_#]+|[\s*_]+$', '', body)
+
+def _find_sections(text, headers):
+    '''
+    Extract whichever of the given section headers appear in text as
+    {header: body}. Sections whose body is empty are treated as missing, so
+    a bare heading can never blank out a section.
     '''
     found = {}
     for match in _SECTION_PATTERN.finditer(text):
         header = match.group(1).upper()
         if header in headers:
-            found[header] = match.group(2).strip()
+            body = _clean_body(match.group(2))
+            if body:
+                found[header] = body
+    return found
 
+def _apply_forced_update(affected_sections, turns_since_update):
+    '''
+    Staleness guard: when the keyword classifier found nothing and the
+    summary hasn't changed for SUMMARY_UPDATE_INTERVAL turns (counting the
+    current one), force a full refresh of every section. Keyword-classified
+    sections always pass through untouched. The counter only resets on a
+    successful update, so a failed forced refresh retries next turn instead
+    of waiting another full interval.
+    '''
+    if not affected_sections and turns_since_update >= SUMMARY_UPDATE_INTERVAL:
+        return list(SECTION_HEADERS)
+    return affected_sections
+
+def _parse_requested_sections(text, headers):
+    '''
+    Extract the given section headers from text as {header: body}.
+    Returns None if any requested header is missing.
+    '''
+    found = _find_sections(text, headers)
     if all(header in found for header in headers):
         return found
     return None
+
+def _parse_partial_sections(text, headers):
+    '''
+    Tolerant variant of _parse_requested_sections: returns whichever of the
+    requested sections are present, or None if none are. Used for summary
+    candidates when the old summary parses, since the merge step fills any
+    section a candidate missed with its previous text.
+    '''
+    found = _find_sections(text, headers)
+    return found if found else None
 
 def _parse_sections(text):
     return _parse_requested_sections(text, SECTION_HEADERS)
@@ -107,7 +153,7 @@ def _parse_sections(text):
 def _build_summary(sections):
     return '\n\n'.join(f'{header}: {sections[header]}' for header in SECTION_HEADERS)
 
-def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, tokens, save, backup, character=None):
+def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, tokens, save, backup, character=None, turns_since_summary_update=0):
 
     try:
         old_chatlogs = copy.deepcopy(chatlogs)
@@ -213,6 +259,12 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
             # hand-written scenario summary) - fall back to regenerating it whole.
             affected_sections = list(SECTION_HEADERS)
 
+        # A quiet stretch of narration can dodge the keyword classifier for
+        # many turns and let the summary drift out of date; force a full
+        # refresh once enough turns pass without a successful update.
+        turns_since_summary_update += 1
+        affected_sections = _apply_forced_update(affected_sections, turns_since_summary_update)
+
         if affected_sections:
 
             last_n_interactions = ""
@@ -247,20 +299,32 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
 
             section_list = ', '.join(affected_sections)
 
+            # The output skeleton and the explicit markdown/numbering ban are
+            # load-bearing: mistral:instruct otherwise decorates or renames
+            # the headings, which makes candidates unparseable.
             instructions = [{
                 'role': 'user',
                 'content':
-                f'''TASK: Update ONLY the following section(s) of the Summary: {section_list}.
+f'''TASK: Update ONLY the following section(s) of the story summary: {section_list}.
 
-                1. Output exactly those section(s) and nothing else. Start each one on its own line with its heading written exactly as shown, e.g. "CURRENT QUEST: ...".
-                2. Do not output any other section, heading, or commentary.
-                3. Give exactly THREE alternative updated versions of the section(s).
-                4. Separate the alternatives by a line containing only: BREAK.
-                5. Do not add any text before the first alternative or after the last alternative.
+Rules:
+1. Write THREE alternative updated versions of the section(s): {section_list}.
+2. Separate the alternatives with a line containing only the word: BREAK
+3. Start each section on its own line as plain uppercase text with a colon, exactly like this: "{affected_sections[0]}: <updated text>".
+4. Plain text only. No markdown, no asterisks, no numbering, no commentary, no text before the first alternative or after the last.
 
-                This is the current text of the section(s) to update: {old_affected_text}
-                These are the last interactions: {last_n_interactions}
-                '''
+Reply in exactly this shape:
+<updated section(s), version 1>
+BREAK
+<updated section(s), version 2>
+BREAK
+<updated section(s), version 3>
+
+Current text of the section(s) to update:
+{old_affected_text}
+
+Latest interactions:
+{last_n_interactions}'''
             }]
 
             try:
@@ -275,9 +339,19 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
 
             if hierarchical_summaries:
 
+                # When the old summary parses, a candidate covering only some
+                # of the affected sections is still usable - the merge below
+                # keeps the previous text for whatever it missed. Only an
+                # unstructured old summary (regenerated whole, nothing to
+                # merge into) needs every section present.
+                parse = (
+                    _parse_requested_sections if old_sections is None
+                    else _parse_partial_sections
+                )
+
                 candidates = [
                     parsed for parsed in (
-                        _parse_requested_sections(candidate, affected_sections)
+                        parse(candidate, affected_sections)
                         for candidate in hierarchical_summaries.split("BREAK")
                     )
                     if parsed is not None
@@ -286,7 +360,10 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
                 if candidates:
 
                     candidate_texts = [
-                        '\n\n'.join(f'{header}: {parsed[header]}' for header in affected_sections)
+                        '\n\n'.join(
+                            f'{header}: {parsed[header]}'
+                            for header in affected_sections if header in parsed
+                        )
                         for parsed in candidates
                     ]
 
@@ -302,6 +379,8 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
                         hierarchical_summary = '\n\n'.join(
                             f'{header}: {best[header]}' for header in affected_sections
                         )
+
+                    turns_since_summary_update = 0
 
                 else:
                     print("WARNING: No valid summary candidates contained the required section(s); keeping the previous summary.")
@@ -332,5 +411,6 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
     return (
         tokens,
         memory,
-        hierarchical_summary
+        hierarchical_summary,
+        turns_since_summary_update
     )

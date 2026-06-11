@@ -8,9 +8,12 @@ from context import (
     QUEST_RESOLUTION_KEYWORDS,
     SECTION_HEADERS,
     STATUS_CHANGE_KEYWORDS,
+    SUMMARY_UPDATE_INTERVAL,
+    _apply_forced_update,
     _build_summary,
     _classify_exchange,
     _contains_keyword,
+    _parse_partial_sections,
     _parse_requested_sections,
     _parse_sections,
 )
@@ -67,6 +70,40 @@ class TestParseSections:
                                           ['CURRENT QUEST'])
         assert found == {'CURRENT QUEST': 'Just this one.'}
 
+    def test_markdown_decorated_headers(self):
+        # The summariser model decorates headings despite being told not to;
+        # the parser must tolerate bold/underscore/heading markers.
+        text = ('**OVERALL STORY**: Escape the cursed valley.\n\n'
+                '## CURRENT QUEST: Cross the rope bridge before nightfall.\n\n'
+                '__PLAYER STATUS__: Unharmed, carrying a lantern and 3 gold pieces.')
+        assert _parse_sections(text) == _parse_sections(WELL_FORMED)
+
+    def test_bold_header_colon_inside(self):
+        # "**CURRENT QUEST:** text" puts the colon inside the bold markers,
+        # leaving "**" at the start of the body - must be stripped.
+        found = _parse_requested_sections('**CURRENT QUEST:** Cross the bridge.',
+                                          ['CURRENT QUEST'])
+        assert found == {'CURRENT QUEST': 'Cross the bridge.'}
+
+    def test_empty_body_treated_as_missing(self):
+        # A bare heading must never blank out a section.
+        assert _parse_requested_sections('CURRENT QUEST:', ['CURRENT QUEST']) is None
+
+
+class TestParsePartialSections:
+    def test_salvages_present_subset(self):
+        found = _parse_partial_sections('CURRENT QUEST: Updated quest.',
+                                        ['OVERALL STORY', 'CURRENT QUEST'])
+        assert found == {'CURRENT QUEST': 'Updated quest.'}
+
+    def test_none_when_no_requested_section_present(self):
+        assert _parse_partial_sections('The model rambled instead.',
+                                       ['CURRENT QUEST']) is None
+
+    def test_full_coverage_matches_strict_parser(self):
+        assert (_parse_partial_sections(WELL_FORMED, SECTION_HEADERS)
+                == _parse_requested_sections(WELL_FORMED, SECTION_HEADERS))
+
 
 class TestContainsKeyword:
     # Prefix matching (leading \b, no trailing boundary) — chosen so stem
@@ -90,6 +127,24 @@ class TestContainsKeyword:
     def test_accepted_tradeoff_prefix_overmatch(self):
         # Documents the deliberate recall-over-precision choice.
         assert _contains_keyword('you feel healthy', ['heal'])
+
+
+class TestApplyForcedUpdate:
+    # Staleness guard: a full refresh is forced once SUMMARY_UPDATE_INTERVAL
+    # turns (counting the current one) pass without a successful update.
+    def test_keyword_sections_pass_through_untouched(self):
+        assert _apply_forced_update(['PLAYER STATUS'], 99) == ['PLAYER STATUS']
+
+    def test_no_force_before_interval(self):
+        assert _apply_forced_update([], SUMMARY_UPDATE_INTERVAL - 1) == []
+
+    def test_forces_full_refresh_at_interval(self):
+        assert _apply_forced_update([], SUMMARY_UPDATE_INTERVAL) == list(SECTION_HEADERS)
+
+    def test_stays_due_past_interval(self):
+        # A failed forced refresh retries the very next turn rather than
+        # waiting another full interval.
+        assert _apply_forced_update([], SUMMARY_UPDATE_INTERVAL + 3) == list(SECTION_HEADERS)
 
 
 class TestClassifyExchange:

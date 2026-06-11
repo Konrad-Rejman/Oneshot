@@ -33,7 +33,7 @@ The suite (~60 tests, sub-second) covers the deterministic logic only — no Oll
 
 - `test_compile.py` — every top-level `.py` file compiles (catches syntax errors without importing `main.py`'s interactive code)
 - `test_context_trim.py` — `_trim_presend` / `_trim_to_memory_budget` / `_estimate_tokens` budget contracts
-- `test_summary.py` — `_parse_sections` / `_build_summary` round-trip, `_classify_exchange` keyword routing (prefix matching: stems like `injur` match "injured"; `heal` matching "healthy" is an accepted trade-off)
+- `test_summary.py` — `_parse_sections` / `_build_summary` round-trip, markdown-tolerant header parsing (`**CURRENT QUEST**:`) and `_parse_partial_sections` candidate salvage, `_classify_exchange` keyword routing (prefix matching: stems like `injur` match "injured"; `heal` matching "healthy" is an accepted trade-off)
 - `test_scoring.py` — composite-score weights (0.6/0.2/0.2), candidate selection argmax, lazy-loading contract (metric helpers monkeypatched; BERT never loaded)
 - `test_rolls.py`, `test_model_prompt.py`, `test_scenarios.py` — roll format, prompt-assembly ordering, scenarios.json file-format CRUD
 - `test_character.py` — `Character` stat validation, dict round-trip, characters.json file-format CRUD, `describe_stat` phrase mapping, `to_prompt` content presence
@@ -61,7 +61,7 @@ The game runs as a terminal loop where the LLM plays a D&D-style Game Master.
 3. **Pre-send trim:** oldest messages are dropped from the prompt until the estimated token count is under `TOKEN_LIMIT` (4096). Estimation uses `len(content) // 4` per message.
 4. The model receives: `[system rules + rolls] + [hierarchical summary] + [as many recent messages as fit] + [current action]`
 5. Response is streamed from Ollama (`model.py:generate_response`)
-6. The exchange is classified by keyword (`_classify_exchange`) to determine which summary sections it affected; a second model call generates 3 candidate updates for just those sections
+6. The exchange is classified by keyword (`_classify_exchange`) to determine which summary sections it affected; a second model call generates 3 candidate updates for just those sections. If no section matched for `SUMMARY_UPDATE_INTERVAL` (5) consecutive turns since the summary last changed, a full refresh of all sections is forced (`_apply_forced_update`; the counter lives in the `main.py` loop, is not persisted across resumes, and resets only on a successful update — so a failed forced refresh retries next turn)
 7. The best candidate is selected by `scoring.py:select_best_candidate` — a weighted score of BERTScore-F1 (0.6) + ROUGE-L (0.2) + cosine similarity (0.2) against the reference (old affected summary sections + last two exchanges); falls back to the lexical signals alone if BERTScore fails
 8. **Post-summary trim:** persistent `memory` is trimmed (oldest first) so that next turn's full prompt will fit under 4096 tokens, using the updated summary's actual token cost: `budget = TOKEN_LIMIT - rules_tokens - character_tokens - ROLLS_TOKEN_RESERVE - summary_tokens - ACTION_TOKEN_RESERVE`
 
@@ -83,6 +83,6 @@ The game runs as a terminal loop where the LLM plays a D&D-style Game Master.
 - `model.py`: `MODEL_NAME = "mistral:instruct"`, `OLLAMA_API = "http://localhost:11434/api/generate"`
 - `rolls.py`: `roll_num = 5` — number of D20 rolls per turn
 - `character.py`: `STAT_NAMES` — the six stats (Strength/Dexterity/Constitution/Intelligence/Wisdom/Charisma); `STAT_MIN/STAT_MAX = 1/10` — clean stat scale, no modifiers; `STAT_POOL = 36` — point pool for interactive stat allocation
-- `context.py`: `TOKEN_LIMIT = 4096` — maximum estimated tokens per prompt; `ROLLS_TOKEN_RESERVE = 30` — token budget reserved for the rolls message; `ACTION_TOKEN_RESERVE = 200` — token budget reserved for the user's next action in post-summary trim
+- `context.py`: `TOKEN_LIMIT = 4096` — maximum estimated tokens per prompt; `ROLLS_TOKEN_RESERVE = 30` — token budget reserved for the rolls message; `ACTION_TOKEN_RESERVE = 200` — token budget reserved for the user's next action in post-summary trim; `SUMMARY_UPDATE_INTERVAL = 5` — turns without a successful summary update before a full refresh is forced
 - `scoring.py`: `BERTSCORE_MODEL = "roberta-large"` — BERTScore base model (lazy-loaded on first scoring call; must ship safetensors weights — transformers 5.x refuses `.bin` checkpoints on the venv's torch 2.5.1); `BERT_WEIGHT/ROUGE_WEIGHT/COSINE_WEIGHT = 0.6/0.2/0.2` — composite scoring weights
 - `saves.py`: `SAVES_DIR = "saves"` / `EXPORTS_DIR = "exports"` — both created on demand, no setup needed; `SAVE_VERSION = 1` — save-format version written into each slot (bump when Phase 2.3 adds progression state); `EXPORT_FORMATS = ['txt', 'md']`

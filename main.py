@@ -15,10 +15,10 @@ rules = {'role': 'system', 'content':
 
     Turn length: respond with only the next beat of the story - the immediate result of the player's action and the situation they now face - then stop and hand control back to the player. Never write ahead to what the player does next, skip forward in time, narrate a sequence of multiple turns, or produce a long multi-scene passage. One reply is one exchange, not a chapter.
 
-    Only call for a roll when the outcome of an action is genuinely uncertain and chance-based. Do not use rolls for pure narrative beats, automatic successes, or flavour descriptions.
+    Stat checks are how chance is resolved. Whenever the player attempts an action whose outcome is uncertain or could fail in a way that matters - fighting, sneaking, climbing, persuading, deceiving, searching, recalling knowledge, resisting harm - you must call for a check of the most relevant stat and resolve it with the next unused roll before narrating the outcome. Expect most player actions to need a check; if in doubt, call for one. Skip a check only for trivial actions that cannot meaningfully fail, plain conversation, and flavour description.
 
     DICE SYSTEM:
-    The system message contains exactly 5 pre-rolled D20 values. Consume them left-to-right, one value per roll called for. Use each number exactly as given; do not invent, round, or paraphrase it. Do not mention the existence of the roll list to the player.
+    The system message contains exactly 5 pre-rolled D20 values. Consume them left-to-right, one value per stat check called for. Use each number exactly as given; do not invent, round, or paraphrase it. Announce each check by naming the stat and the value used ("Roll a Wisdom check... you roll a 13..."). Do not mention the existence of the roll list to the player.
 
     Consequence scaling:
     1-5: Critical failure. The action fails with a meaningful setback or complication.
@@ -211,5 +211,8 @@ else:
         print('\nGM:\n\n' + startMessage)
 
 # Core loop, prompting the Model to continue with the story until the player exits using Ctrl + C
+# Turns since the summary last changed - drives the forced refresh in
+# context_update. Not persisted: resuming a session just restarts the count.
+turns_since_summary_update = 0
 while True:
-    tokens, memory, summary = context_update(chatlogs, context_logs, memory, rules, summary, tokens, save, backup, character)
+    tokens, memory, summary, turns_since_summary_update = context_update(chatlogs, context_logs, memory, rules, summary, tokens, save, backup, character, turns_since_summary_update)
