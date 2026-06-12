@@ -1,5 +1,6 @@
 import requests
 import json
+import ui
 
 OLLAMA_API = "http://localhost:11434/api/generate"
 MODEL_NAME = "mistral:instruct"
@@ -43,7 +44,7 @@ def generate_response(memory, stream=False):
 
     # Stream output as GM
     if stream:
-        print("\nGM:\n\n", end='', flush=True)
+        ui.gm_header()
 
     for raw_line in resp.iter_lines(decode_unicode=True):
         if raw_line is None:
@@ -76,7 +77,8 @@ def generate_response(memory, stream=False):
         except Exception:
             # Not JSON - treat as raw text chunk
             chunk = data
-            print(chunk, end='', flush=True)
+            if stream:
+                ui.gm_chunk(chunk)
             response_text += chunk
             continue
 
@@ -105,11 +107,11 @@ def generate_response(memory, stream=False):
                 first_chunk = False
             if chunk:
                 if stream:
-                    print(chunk, end='', flush=True)
+                    ui.gm_chunk(chunk)
                 response_text += chunk
 
     if stream:
-        print('\n', end='', flush=True)
+        ui.gm_end()
 
     # Return response + prompt token count
     return response_text.strip(), prompt_eval_count

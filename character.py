@@ -1,6 +1,8 @@
 import json, os
 from dataclasses import dataclass, field
 
+import ui
+
 CHARACTERS_FILE = 'characters.json'
 DEFAULT_NAME = 'Default'
 
@@ -140,7 +142,7 @@ def _read_stat_allocation():
     Interactively allocate STAT_POOL points across the six stats,
     STAT_MIN-STAT_MAX each. Returns a stats dict.
     '''
-    print(f'\nAssign your stats: {STAT_POOL} points across {len(STAT_NAMES)} stats, each {STAT_MIN}-{STAT_MAX} (5 is an average person).')
+    ui.system(f'\nAssign your stats: {STAT_POOL} points across {len(STAT_NAMES)} stats, each {STAT_MIN}-{STAT_MAX} (5 is an average person).')
     while True:
         stats = {}
         remaining = STAT_POOL
@@ -148,21 +150,21 @@ def _read_stat_allocation():
             stats_left = len(STAT_NAMES) - i
             while True:
                 try:
-                    value = int(input(f'{stat} ({remaining} points left): ').strip())
+                    value = int(ui.ask(f'{stat} ({remaining} points left):').strip())
                 except ValueError:
-                    print('Please enter a whole number.')
+                    ui.warn('Please enter a whole number.')
                     continue
                 if not (STAT_MIN <= value <= STAT_MAX):
-                    print(f'Value must be between {STAT_MIN} and {STAT_MAX}.')
+                    ui.warn(f'Value must be between {STAT_MIN} and {STAT_MAX}.')
                     continue
                 # Leave at least STAT_MIN for each remaining stat, and don't
                 # bank more points than the remaining stats can absorb.
                 others = stats_left - 1
                 if remaining - value < others * STAT_MIN:
-                    print('That leaves too few points for the remaining stats.')
+                    ui.warn('That leaves too few points for the remaining stats.')
                     continue
                 if remaining - value > others * STAT_MAX:
-                    print('That banks more points than the remaining stats can hold; spend more.')
+                    ui.warn('That banks more points than the remaining stats can hold; spend more.')
                     continue
                 stats[stat] = value
                 remaining -= value
@@ -179,54 +181,52 @@ def choose_character():
         custom = load_characters()
         names = [DEFAULT_NAME] + list(custom.keys())
 
-        print('\nCharacters:')
-        for i, name in enumerate(names, start=1):
-            print(f'  {i}. {name}')
-        print('Enter a number to play that character, "new" to create one, or "delete" to remove one.')
+        ui.menu('Characters:', names)
+        ui.system('Enter a number to play that character, "new" to create one, or "delete" to remove one.')
 
-        choice = input('> ').strip()
+        choice = ui.ask().strip()
         command = choice.lower()
 
         if command == 'new':
-            name = input('Character name: ').strip()
+            name = ui.ask('Character name:').strip()
             if not name or name == DEFAULT_NAME or name in custom:
-                print(f'Please choose a unique name other than "{DEFAULT_NAME}".')
+                ui.warn(f'Please choose a unique name other than "{DEFAULT_NAME}".')
                 continue
 
-            race = input('Race: ').strip()
-            char_class = input('Class: ').strip()
-            background = input('Background (a sentence or two): ').strip()
+            race = ui.ask('Race:').strip()
+            char_class = ui.ask('Class:').strip()
+            background = ui.ask('Background (a sentence or two):').strip()
             if not (race and char_class and background):
-                print('A character needs a race, class and background; nothing was saved.')
+                ui.warn('A character needs a race, class and background; nothing was saved.')
                 continue
 
             stats = _read_stat_allocation()
             character = Character(name=name, race=race, char_class=char_class,
                                   background=background, stats=stats)
             add_character(name, character)
-            print(f'Saved character "{name}".')
+            ui.system(f'Saved character "{name}".')
             continue
 
         if command == 'delete':
             if not custom:
-                print('There are no saved characters to delete.')
+                ui.warn('There are no saved characters to delete.')
                 continue
-            name = input('Name of the character to delete: ').strip()
+            name = ui.ask('Name of the character to delete:').strip()
             if name not in custom:
-                print(f'No saved character named "{name}".')
+                ui.warn(f'No saved character named "{name}".')
                 continue
-            confirm = input(f'Type "yes" to permanently delete "{name}": ').strip().lower()
+            confirm = ui.ask(f'Type "yes" to permanently delete "{name}":').strip().lower()
             if confirm == 'yes':
                 delete_character(name)
-                print(f'Deleted character "{name}".')
+                ui.system(f'Deleted character "{name}".')
             else:
-                print('Cancelled.')
+                ui.system('Cancelled.')
             continue
 
         try:
             selected = names[int(choice) - 1]
         except (ValueError, IndexError):
-            print('Please enter a listed number, "new", or "delete".')
+            ui.warn('Please enter a listed number, "new", or "delete".')
             continue
 
         if selected == DEFAULT_NAME:

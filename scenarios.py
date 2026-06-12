@@ -1,5 +1,7 @@
 import json, os, re
 
+import ui
+
 SCENARIOS_FILE = 'scenarios.json'
 DEFAULT_NAME = 'Default'
 
@@ -69,14 +71,14 @@ def _read_multiline(prompt_label, keep_current=None):
     keep_current is given, submitting nothing returns it unchanged (used when
     editing a scenario so a field can be left as-is).
     '''
-    print(f'\n{prompt_label}')
-    print('Type or paste the text - blank lines are fine. Finish with a line containing only END.')
+    ui.heading(prompt_label)
+    ui.system('Type or paste the text - blank lines are fine. Finish with a line containing only END.')
     if keep_current is not None:
-        print('(Submit nothing to keep the current text.)')
+        ui.system('(Submit nothing to keep the current text.)')
 
     lines = []
     while True:
-        line = input()
+        line = ui.read_line()
         if line.strip() == 'END':
             break
         lines.append(line)
@@ -109,16 +111,16 @@ def _read_summary(keep_current=None):
     Returns the combined summary, or None if some section ended up with no
     text and nothing to fall back on.
     '''
-    print('\nThe summary tracks the story in three sections, which get updated automatically as you play:')
+    ui.system('\nThe summary tracks the story in three sections, which get updated automatically as you play:')
     for header, description in SUMMARY_SECTIONS:
-        print(f'  {header}: {description}')
-    print("You'll be asked for each section in turn - they'll be combined into the summary for you.")
+        ui.system(f'  {header}: {description}')
+    ui.system("You'll be asked for each section in turn - they'll be combined into the summary for you.")
 
     current_sections = None
     if keep_current is not None:
         current_sections = _split_summary(keep_current)
         if current_sections is None:
-            print("(The current summary doesn't split cleanly into those sections, so you'll write each one fresh.)")
+            ui.system("(The current summary doesn't split cleanly into those sections, so you'll write each one fresh.)")
 
     sections = {}
     for header, description in SUMMARY_SECTIONS:
@@ -131,10 +133,8 @@ def _read_summary(keep_current=None):
     return '\n\n'.join(f'{header}: {sections[header]}' for header, _ in SUMMARY_SECTIONS)
 
 def _print_menu(names):
-    print('\nStarting scenarios:')
-    for i, name in enumerate(names, start=1):
-        print(f'  {i}. {name}')
-    print('Enter a number to start there, "new" to write one, "edit" to change a saved one, or "delete" to remove one.')
+    ui.menu('Starting scenarios:', names)
+    ui.system('Enter a number to start there, "new" to write one, "edit" to change a saved one, or "delete" to remove one.')
 
 def choose_scenario():
     '''
@@ -147,33 +147,33 @@ def choose_scenario():
         names = [DEFAULT_NAME] + list(custom.keys())
 
         _print_menu(names)
-        choice = input('> ').strip()
+        choice = ui.ask().strip()
         command = choice.lower()
 
         if command == 'new':
-            name = input('Name for the new scenario: ').strip()
+            name = ui.ask('Name for the new scenario:').strip()
             if not name or name == DEFAULT_NAME or name in custom:
-                print(f'Please choose a unique name other than "{DEFAULT_NAME}".')
+                ui.warn(f'Please choose a unique name other than "{DEFAULT_NAME}".')
                 continue
 
             start_message = _read_multiline('Write the opening scene the GM will narrate first:')
             summary = _read_summary()
 
             if not start_message or not summary:
-                print('A scenario needs both an opening scene and a summary; nothing was saved.')
+                ui.warn('A scenario needs both an opening scene and a summary; nothing was saved.')
                 continue
 
             add_scenario(name, start_message, summary)
-            print(f'Saved scenario "{name}".')
+            ui.system(f'Saved scenario "{name}".')
             continue
 
         if command == 'edit':
             if not custom:
-                print('There are no saved scenarios to edit.')
+                ui.warn('There are no saved scenarios to edit.')
                 continue
-            name = input('Name of the scenario to edit: ').strip()
+            name = ui.ask('Name of the scenario to edit:').strip()
             if name not in custom:
-                print(f'No saved scenario named "{name}".')
+                ui.warn(f'No saved scenario named "{name}".')
                 continue
 
             current = custom[name]
@@ -181,33 +181,33 @@ def choose_scenario():
             summary = _read_summary(keep_current=current['summary'])
 
             if summary is None:
-                print('Each section needs some text; the scenario was left unchanged.')
+                ui.warn('Each section needs some text; the scenario was left unchanged.')
                 continue
 
             edit_scenario(name, start_message, summary)
-            print(f'Updated scenario "{name}".')
+            ui.system(f'Updated scenario "{name}".')
             continue
 
         if command == 'delete':
             if not custom:
-                print('There are no saved scenarios to delete.')
+                ui.warn('There are no saved scenarios to delete.')
                 continue
-            name = input('Name of the scenario to delete: ').strip()
+            name = ui.ask('Name of the scenario to delete:').strip()
             if name not in custom:
-                print(f'No saved scenario named "{name}".')
+                ui.warn(f'No saved scenario named "{name}".')
                 continue
-            confirm = input(f'Type "yes" to permanently delete "{name}": ').strip().lower()
+            confirm = ui.ask(f'Type "yes" to permanently delete "{name}":').strip().lower()
             if confirm == 'yes':
                 delete_scenario(name)
-                print(f'Deleted scenario "{name}".')
+                ui.system(f'Deleted scenario "{name}".')
             else:
-                print('Cancelled.')
+                ui.system('Cancelled.')
             continue
 
         try:
             selected = names[int(choice) - 1]
         except (ValueError, IndexError):
-            print('Please enter a listed number, "new", "edit", or "delete".')
+            ui.warn('Please enter a listed number, "new", "edit", or "delete".')
             continue
 
         if selected == DEFAULT_NAME:

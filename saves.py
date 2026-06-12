@@ -14,6 +14,8 @@ loadable.
 '''
 import json, os, re, time
 
+import ui
+
 SAVES_DIR = 'saves'
 EXPORTS_DIR = 'exports'
 SAVE_VERSION = 2
@@ -114,19 +116,19 @@ def prompt_session_save(state):
     Returns the slot name saved to, or None if the player skipped saving.
     '''
     while True:
-        raw = input('\nSave this story to a named slot? Enter a name, or leave blank to skip: ').strip()
+        raw = ui.ask('\nSave this story to a named slot? Enter a name, or leave blank to skip:').strip()
         if not raw:
             return None
         name = _sanitize_name(raw)
         if not name:
-            print('That name has no usable characters; use letters, numbers, spaces, dashes or underscores.')
+            ui.warn('That name has no usable characters; use letters, numbers, spaces, dashes or underscores.')
             continue
         if name in list_saves():
-            confirm = input(f'A save named "{name}" already exists. Type "yes" to overwrite it: ').strip().lower()
+            confirm = ui.ask(f'A save named "{name}" already exists. Type "yes" to overwrite it:').strip().lower()
             if confirm != 'yes':
                 continue
         save_session(name, state)
-        print(f'Saved story "{name}".')
+        ui.system(f'Saved story "{name}".')
         return name
 
 def prompt_transcript_export(chatlogs, default_name):
@@ -136,14 +138,14 @@ def prompt_transcript_export(chatlogs, default_name):
     chosen, otherwise the session file name).
     '''
     while True:
-        fmt = input('Export the transcript? Enter "txt" or "md", or leave blank to skip: ').strip().lower()
+        fmt = ui.ask('Export the transcript? Enter "txt" or "md", or leave blank to skip:').strip().lower()
         if not fmt:
             return
         if fmt not in EXPORT_FORMATS:
-            print('Please enter "txt", "md", or leave blank to skip.')
+            ui.warn('Please enter "txt", "md", or leave blank to skip.')
             continue
         path = export_transcript(chatlogs, default_name, fmt)
-        print(f'Transcript written to {path}.')
+        ui.system(f'Transcript written to {path}.')
         return
 
 def choose_save():
@@ -157,48 +159,49 @@ def choose_save():
         if not names:
             return None
 
-        print('\nSaved stories:')
-        for i, name in enumerate(names, start=1):
+        entries = []
+        for name in names:
             saved_on = time.strftime('%Y-%m-%d %H:%M', time.localtime(os.path.getmtime(_save_path(name))))
-            print(f'  {i}. {name} (saved {saved_on})')
-        print('Enter a number to continue that story, "new" to start a new one, "export" to export a transcript, or "delete" to remove a save.')
+            entries.append(f'{name} (saved {saved_on})')
+        ui.menu('Saved stories:', entries)
+        ui.system('Enter a number to continue that story, "new" to start a new one, "export" to export a transcript, or "delete" to remove a save.')
 
-        choice = input('> ').strip()
+        choice = ui.ask().strip()
         command = choice.lower()
 
         if command == 'new':
             return None
 
         if command == 'export':
-            name = input('Name of the save to export: ').strip()
+            name = ui.ask('Name of the save to export:').strip()
             if name not in names:
-                print(f'No save named "{name}".')
+                ui.warn(f'No save named "{name}".')
                 continue
-            fmt = input('Format ("txt" or "md"): ').strip().lower()
+            fmt = ui.ask('Format ("txt" or "md"):').strip().lower()
             if fmt not in EXPORT_FORMATS:
-                print('Please choose "txt" or "md".')
+                ui.warn('Please choose "txt" or "md".')
                 continue
             path = export_transcript(load_session(name)['Chat Logs'], name, fmt)
-            print(f'Transcript written to {path}.')
+            ui.system(f'Transcript written to {path}.')
             continue
 
         if command == 'delete':
-            name = input('Name of the save to delete: ').strip()
+            name = ui.ask('Name of the save to delete:').strip()
             if name not in names:
-                print(f'No save named "{name}".')
+                ui.warn(f'No save named "{name}".')
                 continue
-            confirm = input(f'Type "yes" to permanently delete "{name}": ').strip().lower()
+            confirm = ui.ask(f'Type "yes" to permanently delete "{name}":').strip().lower()
             if confirm == 'yes':
                 delete_save(name)
-                print(f'Deleted save "{name}".')
+                ui.system(f'Deleted save "{name}".')
             else:
-                print('Cancelled.')
+                ui.system('Cancelled.')
             continue
 
         try:
             selected = names[int(choice) - 1]
         except (ValueError, IndexError):
-            print('Please enter a listed number, "new", "export", or "delete".')
+            ui.warn('Please enter a listed number, "new", "export", or "delete".')
             continue
 
         return load_session(selected)

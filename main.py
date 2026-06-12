@@ -6,6 +6,7 @@ from scenarios import choose_scenario
 from character import choose_character, Character, DEFAULT_CHARACTER
 from progression import Progression, new_progression, prompt_starting_spell_slots
 from saves import choose_save, prompt_session_save, prompt_transcript_export, format_transcript_text
+import ui
 
 # Model setup
 rules = {'role': 'system', 'content':
@@ -159,7 +160,7 @@ def backup(chatlogs, context_logs, memory, tokens):
 try:
     requests.get("http://localhost:11434", timeout=2)
 except Exception:
-    print("Ollama not detected, starting server...")
+    ui.system("Ollama not detected, starting server...")
     kwargs = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
     if hasattr(subprocess, "CREATE_NO_WINDOW"):
         kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
@@ -168,12 +169,12 @@ except Exception:
         time.sleep(1)
         try:
             requests.get("http://localhost:11434", timeout=2)
-            print("Ollama started.")
+            ui.system("Ollama started.")
             break
         except Exception:
             continue
     else:
-        print("Could not start Ollama. Please run 'ollama serve' manually.")
+        ui.error("Could not start Ollama. Please run 'ollama serve' manually.")
         quit()
 
 # Check if backup exists, if so then carry on interrupted session
@@ -185,11 +186,11 @@ if 'backup.pkl' in os.listdir():
 
 else:
     # Game start
-    print('Press ctrl + c to exit.')
-    print('The LLM will act as the Game Master (GM), play along by inputing your characters actions each turn and the LLM will respond with the outcome setting up the next turn.')
+    ui.system('Press ctrl + c to exit.')
+    ui.system('The LLM will act as the Game Master (GM), play along by inputing your characters actions each turn and the LLM will respond with the outcome setting up the next turn.')
 
     # Get user identifier
-    user = input('Enter your username (please use the same username for each session): ')
+    user = ui.ask('Enter your username (please use the same username for each session):')
 
     # Continue a named saved story, or start a new one (menu skipped when no saves exist)
     saved_state = choose_save()
@@ -201,10 +202,10 @@ else:
         # Re-print the last GM message so the player remembers where the story left off
         last_gm = next((msg['content'] for msg in reversed(chatlogs) if msg.get('role') == 'assistant'), None)
         if last_gm:
-            print('\nGM:\n\n' + last_gm)
+            ui.gm_message(last_gm)
 
     else:
-        print('Generating...')
+        ui.system('Generating...')
         playtime = [[time.time()]]
 
         # Select/write/edit/delete the scenario this session opens with
@@ -226,7 +227,7 @@ else:
         # Initialise token counter
         tokens = 0
 
-        print('\nGM:\n\n' + startMessage)
+        ui.gm_message(startMessage)
 
 # Core loop, prompting the Model to continue with the story until the player exits using Ctrl + C
 # Turns since the summary last changed - drives the forced refresh in

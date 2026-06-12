@@ -29,13 +29,14 @@ ollama serve
 .venv312\Scripts\python.exe -m pytest tests -q
 ```
 
-The suite (~60 tests, sub-second) covers the deterministic logic only — no Ollama, no spaCy/BERT model load (`tests/conftest.py` stubs `spacy` before importing `context`, since `scoring.py` — imported by `context.py` — loads `en_core_web_md` at import time; the BERT model loads lazily and is monkeypatched in tests):
+The suite (~160 tests, sub-second) covers the deterministic logic only — no Ollama, no spaCy/BERT model load (`tests/conftest.py` stubs `spacy` before importing `context`, since `scoring.py` — imported by `context.py` — loads `en_core_web_md` at import time; the BERT model loads lazily and is monkeypatched in tests):
 
 - `test_compile.py` — every top-level `.py` file compiles (catches syntax errors without importing `main.py`'s interactive code)
 - `test_context_trim.py` — `_trim_presend` / `_trim_to_memory_budget` / `_estimate_tokens` budget contracts
 - `test_summary.py` — `_parse_sections` / `_build_summary` round-trip, markdown-tolerant header parsing (`**CURRENT QUEST**:`) and `_parse_partial_sections` candidate salvage, `_classify_exchange` keyword routing (prefix matching: stems like `injur` match "injured"; `heal` matching "healthy" is an accepted trade-off)
 - `test_scoring.py` — composite-score weights (0.6/0.2/0.2), candidate selection argmax, lazy-loading contract (metric helpers monkeypatched; BERT never loaded)
-- `test_rolls.py`, `test_model_prompt.py`, `test_scenarios.py` — roll format, prompt-assembly ordering, scenarios.json file-format CRUD
+- `test_rolls.py`, `test_model_prompt.py`, `test_scenarios.py` — roll format (incl. the `roll_values`/`rolls_message` split and `rolls()` equivalence), prompt-assembly ordering, scenarios.json file-format CRUD
+- `test_ui.py` — `roll_style` consequence-tier colours, `hp_style` thresholds (green above 2/3, yellow above 1/3, red at/below), capture-based checks that the dice line and status bar render the player-facing values (no colour/box-character assertions)
 - `test_character.py` — `Character` stat validation, dict round-trip, characters.json file-format CRUD, `describe_stat` phrase mapping, `to_prompt` content presence
 - `test_progression.py` — `Progression` validation/dict round-trip (JSON-safe), XP curve and level-up effects, death/resurrection clamping, STATE-line grammar (`parse_state_changes`, markdown-tolerant like the summary headers) and `apply_state_changes` clamping rules, `to_prompt` content presence; the interactive level-up/death prompts are deliberately untested
 - `test_saves.py` — save-name sanitisation, `saves/` slot file-format CRUD (state keys incl. `Progression` + `Version`/`Name` metadata round-trip), transcript text formatting, export writing
@@ -46,7 +47,7 @@ The suite (~60 tests, sub-second) covers the deterministic logic only — no Oll
 
 The tests deliberately do NOT assert on (see ROADMAP.md):
 - Rules system-prompt text — Phase 1.1 rewrites it
-- Interactive menus/UI — Phase 2 reworks them
+- Interactive menus and exact rendering (colours, box characters, prompt wording) — only `ui.py`'s pure style helpers and rendered data content are tested
 - Exact prompt framing in `_build_prompt_from_memory` (only content presence + order) — Phase 3 fine-tuning may change the format
 
 When implementing roadmap items, extend the suite to cover the new deterministic logic the same way (pure functions tested directly; Ollama/model calls never invoked).
@@ -55,9 +56,11 @@ When implementing roadmap items, extend the suite to cover the new deterministic
 
 The game runs as a terminal loop where the LLM plays a D&D-style Game Master.
 
+**Terminal UI (ROADMAP 2.4):** every print/input goes through `ui.py`, a presentation layer built on `rich` — a status-bar panel (name, colour-coded HP, level, XP, tokens) above each turn's input line, GM speech streamed under a `GM` rule, the turn's D20 pool colour-coded by consequence tier (`ui.roll_style`), dim system messages, magenta game events, yellow warnings, red errors. Game text is printed with `markup=False`/`Text()` so brackets in model output are never parsed as markup. Game logic never calls `print`/`input` directly, so a future full-screen TUI (`textual`) only has to reimplement `ui.py`.
+
 **Data flow per turn** (`context.py:context_update`):
 
-1. User inputs their action
+1. The status bar is rendered (`ui.status_bar`), then the user inputs their action; the turn's 5 D20 values are then shown colour-coded (`ui.dice`)
 2. 5 pre-generated D20 rolls (`rolls.py`), the character sheet (`character.py:Character.to_prompt`) and the progression STATUS block (`progression.py:Progression.to_prompt` — HP, level, XP, spell slots, inventory, features) are appended to the system prompt — the rolls so the model uses them instead of hallucinating numbers, the sheet so the model judges actions through the character's stats (D&D six on a clean 1-10 scale, no modifiers; a relevant stat of 8+ shifts the roll's consequence tier up by one, 3- shifts it down, naturals never shift), the STATUS block so the model references HP/slots/items accurately instead of remembering them
 3. **Pre-send trim:** oldest messages are dropped from the prompt until the estimated token count is under `TOKEN_LIMIT` (4096). Estimation uses `len(content) // 4` per message.
 4. The model receives: `[system rules + rolls] + [hierarchical summary] + [as many recent messages as fit] + [current action]`
@@ -84,7 +87,8 @@ The game runs as a terminal loop where the LLM plays a D&D-style Game Master.
 ## Key Constants
 
 - `model.py`: `MODEL_NAME = "mistral:instruct"`, `OLLAMA_API = "http://localhost:11434/api/generate"`
-- `rolls.py`: `roll_num = 5` — number of D20 rolls per turn
+- `rolls.py`: `roll_num = 5` — number of D20 rolls per turn (`roll_values()` generates the list, `rolls_message(values)` renders the prompt text, `rolls()` composes the two)
+- `ui.py`: one style constant per output kind (`SYSTEM_STYLE`, `EVENT_STYLE`, `WARN_STYLE`, `ERROR_STYLE`, `PROMPT_STYLE`, `HEADING_STYLE`, `GM_RULE_STYLE`); `roll_style(value)` / `hp_style(hp, max_hp)` — pure tier/threshold helpers, tested in `test_ui.py`
 - `character.py`: `STAT_NAMES` — the six stats (Strength/Dexterity/Constitution/Intelligence/Wisdom/Charisma); `STAT_MIN/STAT_MAX = 1/10` — clean stat scale, no modifiers; `STAT_POOL = 36` — point pool for interactive stat allocation
 - `context.py`: `TOKEN_LIMIT = 4096` — maximum estimated tokens per prompt; `ROLLS_TOKEN_RESERVE = 30` — token budget reserved for the rolls message; `ACTION_TOKEN_RESERVE = 200` — token budget reserved for the user's next action in post-summary trim; `SUMMARY_UPDATE_INTERVAL = 5` — turns without a successful summary update before a full refresh is forced
 - `scoring.py`: `BERTSCORE_MODEL = "roberta-large"` — BERTScore base model (lazy-loaded on first scoring call; must ship safetensors weights — transformers 5.x refuses `.bin` checkpoints on the venv's torch 2.5.1); `BERT_WEIGHT/ROUGE_WEIGHT/COSINE_WEIGHT = 0.6/0.2/0.2` — composite scoring weights

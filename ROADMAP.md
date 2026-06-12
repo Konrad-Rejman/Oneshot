@@ -68,14 +68,15 @@ All progression state lives in `progression.py:Progression` (HP/max HP, level, X
 
 **Future work this keeps open:** Phase 2.4's status bar reads `Progression` fields directly; Phase 3 training data must include the STATE line in assistant turns so the fine-tuned model keeps emitting it; further progression state (conditions, currency) should be new `Progression` fields plus new STATE-line entry kinds, with another `SAVE_VERSION` bump.
 
-### 2.4 Terminal UI
+### 2.4 Terminal UI — IMPLEMENTED
 
-Current interface is plain `print`/`input`, change to `rich` or `textual`:
+Every print/input in the game now goes through `ui.py`, a presentation layer built on `rich` (already pinned in `requirements.txt`):
 
-- Split-pane layout: GM narrative scrolling above, input line pinned below
-- Persistent status bar showing character name, HP, level, and cumulative token count
-- Distinct formatting for GM speech, roll results, and system messages
-- Colour-coded display of D20 values when consumed each turn
+- **Status bar:** a panel rendered directly above each turn's input line showing character name, HP (colour-coded green/yellow/red by thirds of max, `ui.hp_style`), level, XP and cumulative token count — read straight off the `Progression`/`Character` dataclasses as planned (`ui.status_bar`, called from `context.py:context_update`)
+- **Distinct formatting:** GM speech streams under a `GM` rule separator; system/instruction messages are dim; game events (level-up, death, resurrection) are bold magenta; warnings yellow; errors bold red; input prompts green. One style constant per output kind at the top of `ui.py`. Game text is always printed with `markup=False`/`Text()` so model output containing brackets is never parsed as rich markup
+- **Colour-coded D20s:** the turn's 5 pre-rolled values are shown once the action is submitted, coloured by consequence tier (1-5 red, 6-10 yellow, 11-15 cyan, 16-20 green, naturals emphasised — `ui.roll_style`, matching the rules prompt's scaling). The whole turn pool is displayed rather than per-roll consumption, because consumption only exists in the model's narration and is not machine-tracked. `rolls.py` was split into `roll_values()` + `rolls_message(values)` so the UI and the prompt share the same values; `rolls()` is the unchanged composition of the two
+
+**Divergence from the original plan:** `rich` was chosen over `textual`, so the layout scrolls rather than being a true split-pane with a pinned input widget — the status bar + prompt re-rendered at the bottom each turn approximate it. A real split-pane would mean rewriting the synchronous `input()`/`KeyboardInterrupt` control flow (the Ctrl+C save path, the mid-turn level-up/death menus) into an async TUI. The path stays open: game logic never touches `print`/`input` directly, so a later `textual` upgrade only has to reimplement `ui.py`'s functions.
 
 ---
 

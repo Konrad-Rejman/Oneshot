@@ -16,6 +16,7 @@ parse, so nothing changes that turn.
 import re
 from dataclasses import dataclass, field
 
+import ui
 from character import STAT_MAX, STAT_NAMES
 
 # Flat XP curve: level N is reached at (N - 1) * XP_PER_LEVEL total XP. The
@@ -280,23 +281,23 @@ def prompt_starting_spell_slots():
     New-game question: how many level-1 spell slots the character starts
     with (0 or blank for a non-caster). Returns the count.
     '''
-    print('\nSpell slots are your budget for casting spells: each spell cast spends one slot of '
-          'the matching level, and the GM will not let you cast once you have none left. '
-          'They refill when you level up, and you can gain more as level-up rewards.')
-    print('If your character casts spells, choose how many level-1 slots they start with (2 is typical); '
-          'if not, enter 0 - you can still become a caster later.')
+    ui.system('\nSpell slots are your budget for casting spells: each spell cast spends one slot of '
+              'the matching level, and the GM will not let you cast once you have none left. '
+              'They refill when you level up, and you can gain more as level-up rewards.')
+    ui.system('If your character casts spells, choose how many level-1 slots they start with (2 is typical); '
+              'if not, enter 0 - you can still become a caster later.')
     while True:
-        raw = input('Starting level-1 spell slots (0 or blank for a non-caster): ').strip()
+        raw = ui.ask('Starting level-1 spell slots (0 or blank for a non-caster):').strip()
         if not raw:
             return 0
         try:
             value = int(raw)
         except ValueError:
-            print('Please enter a whole number.')
+            ui.warn('Please enter a whole number.')
             continue
         if 0 <= value <= 9:
             return value
-        print('Please enter a number between 0 and 9.')
+        ui.warn('Please enter a number between 0 and 9.')
 
 def prompt_level_up(progression, character):
     '''
@@ -306,39 +307,37 @@ def prompt_level_up(progression, character):
     '''
     while pending_level_ups(progression) > 0:
         level_up(progression)
-        print(f'\nLevel up! You are now level {progression.level}: '
-              f'max HP is {progression.max_hp}, you are fully healed and your spell slots are restored.')
-        print('Choose your class feature for this level:')
-        print('  1. Increase a stat by 1')
-        print('  2. Learn a new class feature')
-        print('  3. Gain a spell slot')
+        ui.event(f'\nLevel up! You are now level {progression.level}: '
+                 f'max HP is {progression.max_hp}, you are fully healed and your spell slots are restored.')
+        ui.menu('Choose your class feature for this level:',
+                ['Increase a stat by 1', 'Learn a new class feature', 'Gain a spell slot'])
         while True:
-            choice = input('> ').strip()
+            choice = ui.ask().strip()
             if choice == '1':
                 for stat in STAT_NAMES:
-                    print(f'  {stat}: {character.stats[stat]}')
-                stat = input('Stat to increase: ').strip().title()
+                    ui.system(f'  {stat}: {character.stats[stat]}')
+                stat = ui.ask('Stat to increase:').strip().title()
                 if increase_stat(character, stat):
-                    print(f'{stat} is now {character.stats[stat]}.')
+                    ui.system(f'{stat} is now {character.stats[stat]}.')
                     break
-                print(f'Cannot increase "{stat}" - pick a listed stat that is below {STAT_MAX}.')
+                ui.warn(f'Cannot increase "{stat}" - pick a listed stat that is below {STAT_MAX}.')
                 continue
             if choice == '2':
-                feature = input('Describe the feature (a short phrase, e.g. "Second Wind"): ').strip()
+                feature = ui.ask('Describe the feature (a short phrase, e.g. "Second Wind"):').strip()
                 if feature:
                     grant_feature(progression, feature)
-                    print(f'Learned "{feature}".')
+                    ui.system(f'Learned "{feature}".')
                     break
-                print('The feature needs a name.')
+                ui.warn('The feature needs a name.')
                 continue
             if choice == '3':
-                slot_level = input('Spell slot level (1-9): ').strip()
+                slot_level = ui.ask('Spell slot level (1-9):').strip()
                 if grant_spell_slot(progression, slot_level):
-                    print(f'You now have {progression.spell_slots_max[slot_level]} level-{slot_level} spell slot(s).')
+                    ui.system(f'You now have {progression.spell_slots_max[slot_level]} level-{slot_level} spell slot(s).')
                     break
-                print('Please enter a slot level from 1 to 9.')
+                ui.warn('Please enter a slot level from 1 to 9.')
                 continue
-            print('Please enter 1, 2, or 3.')
+            ui.warn('Please enter 1, 2, or 3.')
 
 def prompt_death(progression):
     '''
@@ -346,14 +345,14 @@ def prompt_death(progression):
     XP, revived at half max HP) or let the story end. Returns True after
     resurrecting, False to end - the caller saves and exits on False.
     '''
-    print('\nYour character has fallen - their HP has reached 0.')
+    ui.event('\nYour character has fallen - their HP has reached 0.')
     while True:
-        choice = input(f'Type "resurrect" to return to life (costs {RESURRECTION_XP_PENALTY} XP, '
-                       'revived at half HP) or "end" to end the story here: ').strip().lower()
+        choice = ui.ask(f'Type "resurrect" to return to life (costs {RESURRECTION_XP_PENALTY} XP, '
+                        'revived at half HP) or "end" to end the story here:').strip().lower()
         if choice == 'resurrect':
             resurrect(progression)
-            print(f'You are pulled back from death with {progression.hp}/{progression.max_hp} HP.')
+            ui.event(f'You are pulled back from death with {progression.hp}/{progression.max_hp} HP.')
             return True
         if choice == 'end':
             return False
-        print('Please type "resurrect" or "end".')
+        ui.warn('Please type "resurrect" or "end".')

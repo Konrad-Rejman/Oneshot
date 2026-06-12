@@ -1,5 +1,6 @@
-from rolls import rolls
+from rolls import roll_values, rolls_message
 from model import generate_response
+import ui
 from scoring import select_best_candidate
 from progression import (
     parse_state_changes, apply_state_changes, pending_level_ups,
@@ -177,14 +178,22 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
         old_memory = copy.deepcopy(memory)
         old_tokens = copy.deepcopy(tokens)
 
-        action = input("\nDescribe the players' actions: ")
+        # Status bar (ROADMAP 2.4) above the pinned input line: name, HP,
+        # level, XP, cumulative tokens, read straight off the dataclasses.
+        if character is not None and progression is not None:
+            ui.status_bar(character, progression, tokens)
+        action = ui.ask("Describe the players' actions:")
 
         chatlogs.append({
             'role': 'user',
             'content': action
         })
 
-        rolls_message = rolls()
+        # The turn's D20 pool, shown colour-coded once the action is locked
+        # in (the same values the model consumes this turn).
+        turn_rolls = roll_values()
+        ui.dice(turn_rolls)
+        turn_rolls_message = rolls_message(turn_rolls)
         # Character sheet appended to the system prompt each turn (like the
         # rolls) so trims can never drop it; tokens are accounted for in the
         # post-summary budget below.
@@ -194,7 +203,7 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
         progression_text = '\n\n' + progression.to_prompt() if progression else ''
         # Preserve original rules content so we can restore it later
         original_rules_content = rules['content']
-        rules['content'] = original_rules_content + character_text + progression_text + rolls_message
+        rules['content'] = original_rules_content + character_text + progression_text + turn_rolls_message
 
         if memory[0] == rules:
 
@@ -228,7 +237,7 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
 
         except Exception as e:
 
-            print(e)
+            ui.error(e)
 
             backup(
                 old_chatlogs,
@@ -362,7 +371,7 @@ Latest interactions:
 
             except Exception:
 
-                print("ERROR: Hierarchical Summaries not obtained.")
+                ui.error("ERROR: Hierarchical Summaries not obtained.")
                 hierarchical_summaries = None
 
             if hierarchical_summaries:
@@ -411,7 +420,7 @@ Latest interactions:
                     turns_since_summary_update = 0
 
                 else:
-                    print("WARNING: No valid summary candidates contained the required section(s); keeping the previous summary.")
+                    ui.warn("WARNING: No valid summary candidates contained the required section(s); keeping the previous summary.")
 
         # Post-summary trim: trim persistent memory using updated summary's actual token cost
         _trim_to_memory_budget(memory, rules['content'], hierarchical_summary,
@@ -445,7 +454,7 @@ Latest interactions:
 
     except Exception as e:
 
-        print(e)
+        ui.error(e)
 
         backup(
             old_chatlogs,

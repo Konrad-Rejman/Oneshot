@@ -46,7 +46,7 @@ Next you'll pick the character to play as — the built-in default or one of you
 
 Finally you'll set your starting level-1 spell slots — your budget for casting spells — or enter 0 for a non-caster. During play the GM also tracks your character's HP, level, XP, spell slots and inventory, and reads them every turn: dangerous failures cost HP, rest and healing restore it, casting spells spends slots, and overcoming challenges earns XP. Earning enough XP levels you up — your maximum HP grows, you're fully healed, and you choose a reward: a stat increase, a new class feature, or an extra spell slot. If your HP reaches 0 your character falls, and you choose between resurrecting (revived at half HP, for an XP cost) or ending the story there.
 
-The program will then initialise and start the gameplay loop. Press `Ctrl+C` to exit and save the session. On exit you can also keep the story in a named save slot — stored in `saves/` and offered in the saved-stories menu next time — and export the session transcript as plain text or Markdown into `exports/` (both folders are created automatically).
+The program will then initialise and start the gameplay loop. Each turn a status panel above the input line shows your character's name, HP (colour-coded green/yellow/red by how hurt you are), level, XP and the session's running token count. Once you submit an action, the turn's five D20 rolls are displayed, colour-coded from red (failure) through yellow and cyan to green (success), and the GM's response streams in under a `GM` divider — so GM narration, dice results, system messages and game events (level-ups, death) are each visually distinct. Press `Ctrl+C` to exit and save the session. On exit you can also keep the story in a named save slot — stored in `saves/` and offered in the saved-stories menu next time — and export the session transcript as plain text or Markdown into `exports/` (both folders are created automatically).
 
 If the program crashes unexpectedly, a `backup.pkl` file is saved with the full session state. The next run will automatically resume from it. Delete `backup.pkl` once it has been loaded to start a fresh session.
 
@@ -56,7 +56,7 @@ If the program crashes unexpectedly, a `backup.pkl` file is saved with the full 
 python -m pytest tests -q
 ```
 
-The test suite checks the deterministic game logic — token-budget trimming, summary parsing and candidate scoring, the D20 roll format, character validation, the progression rules (HP/XP/spell-slot bookkeeping, level-ups, death and resurrection), and the scenario, character and save-slot storage formats — and runs in under a second. It doesn't need Ollama running or the spaCy/BERTScore models downloaded, so it works before full setup is complete.
+The test suite checks the deterministic game logic — token-budget trimming, summary parsing and candidate scoring, the D20 roll format, character validation, the progression rules (HP/XP/spell-slot bookkeeping, level-ups, death and resurrection), the terminal UI's colour rules (dice tiers, HP thresholds) and rendered status values, and the scenario, character and save-slot storage formats — and runs in under a second. It doesn't need Ollama running or the spaCy/BERTScore models downloaded, so it works before full setup is complete.
 
 When editing the project with Claude Code, a hook runs the suite automatically after every change to a Python file and reports any failures.
 
