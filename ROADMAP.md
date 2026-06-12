@@ -57,12 +57,16 @@ Extends the existing session persistence (`saves.py` + `main.py`):
 - **Load at startup:** when saves exist, a startup menu (`saves.py:choose_save`) lists them most-recent-first to continue, export, or delete; `backup.pkl` crash-resume still takes priority and both restore through the same `main.py:restore_session` path.
 - **Transcript export:** plain text (`format_transcript_text`, the same format the `sessions/` files use) or Markdown (`format_transcript_markdown`), written to `exports/`, offered on exit and from the startup menu.
 
-### 2.3 Character Stats and Progression
+### 2.3 Character Stats and Progression — IMPLEMENTED
 
-- Track HP, spell slots, inventory, and XP between turns
-- Surface relevant stats in the system prompt each turn so the model can reference them accurately (e.g. "The player currently has 8 HP and 2 first-level spell slots remaining")
-- Level-up prompts at XP thresholds with class feature choices
-- Death and resurrection mechanics tied to HP
+All progression state lives in `progression.py:Progression` (HP/max HP, level, XP, per-level spell slots, inventory, named class features), serialised alongside the character in `backup.pkl` and the save slots (`SAVE_VERSION` bumped to 2; version-1 saves load with a fresh progression):
+
+- **Tracking between turns:** the GM model reports each turn's mechanical changes in a machine-read line at the end of its reply (`STATE: HP -3; XP +25; GAIN torch; LOSE rope; SLOT 1 -1`, or `STATE: none`), mandated by the `STATE LINE` rules section. `parse_state_changes` strips the line before the response is stored anywhere and `apply_state_changes` applies it with clamping (HP to `[0, max_hp]`, XP floored at the current level so the model can never de-level, slots to `[0, max]`, invalid entries ignored). A missing or mangled state line degrades safely to "nothing changed". A turn with state changes also forces the PLAYER STATUS summary section into the update set (`context.py:_affected_sections`).
+- **Surfacing in the prompt:** `Progression.to_prompt` renders a `STATUS` block (HP, level, XP to next level, slots remaining, inventory, features) appended to the system prompt each turn like the character sheet; the `PROGRESSION` rules section makes it the single source of truth and tells the model to charge HP for failed dangerous checks and award 10–50 XP per overcome challenge.
+- **Level-ups:** flat XP curve (`XP_PER_LEVEL` = 100 per level, capped at `MAX_LEVEL` = 10). Crossing a threshold triggers an interactive prompt per level (`prompt_level_up`): +`HP_PER_LEVEL` max HP, full heal, slots restored, plus a class-feature choice — +1 to a stat (capped at `STAT_MAX`), a named free-text feature, or a new spell slot of any level. Starting max HP is `STARTING_HP_BASE` + Constitution; starting level-1 slots are asked once at new-game time (`prompt_starting_spell_slots`).
+- **Death and resurrection:** HP 0 ends the turn in a death menu (`prompt_death`): resurrect at half max HP for `RESURRECTION_XP_PENALTY` XP (floored so no level is lost) — a revival note is injected into the story so the GM narrates from it — or end the story, which goes through the normal save/export flow.
+
+**Future work this keeps open:** Phase 2.4's status bar reads `Progression` fields directly; Phase 3 training data must include the STATE line in assistant turns so the fine-tuned model keeps emitting it; further progression state (conditions, currency) should be new `Progression` fields plus new STATE-line entry kinds, with another `SAVE_VERSION` bump.
 
 ### 2.4 Terminal UI
 

@@ -1,6 +1,10 @@
 from rolls import rolls
 from model import generate_response
 from scoring import select_best_candidate
+from progression import (
+    parse_state_changes, apply_state_changes, pending_level_ups,
+    prompt_level_up, is_dead, prompt_death,
+)
 import copy, re
 
 TOKEN_LIMIT = 4096
@@ -92,6 +96,18 @@ def _classify_exchange(action, response):
 
     return affected
 
+def _affected_sections(action, response, state_changed):
+    '''
+    Summary sections this turn's exchange affects: the keyword
+    classification, plus PLAYER STATUS whenever the GM's STATE line reported
+    a mechanical change (HP/XP/items/slots) - those belong in the status
+    section even when the narration dodges the keyword lists.
+    '''
+    affected = _classify_exchange(action, response)
+    if state_changed:
+        affected.add('PLAYER STATUS')
+    return affected
+
 def _clean_body(body):
     '''
     Strip stray markdown decoration and whitespace from the edges of a
@@ -153,7 +169,7 @@ def _parse_sections(text):
 def _build_summary(sections):
     return '\n\n'.join(f'{header}: {sections[header]}' for header in SECTION_HEADERS)
 
-def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, tokens, save, backup, character=None, turns_since_summary_update=0):
+def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, tokens, save, backup, character=None, turns_since_summary_update=0, progression=None):
 
     try:
         old_chatlogs = copy.deepcopy(chatlogs)
@@ -173,9 +189,12 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
         # rolls) so trims can never drop it; tokens are accounted for in the
         # post-summary budget below.
         character_text = '\n\n' + character.to_prompt() if character else ''
+        # Current HP/level/slots/inventory (ROADMAP 2.3), surfaced the same
+        # way as the character sheet so the model references them accurately.
+        progression_text = '\n\n' + progression.to_prompt() if progression else ''
         # Preserve original rules content so we can restore it later
         original_rules_content = rules['content']
-        rules['content'] = original_rules_content + character_text + rolls_message
+        rules['content'] = original_rules_content + character_text + progression_text + rolls_message
 
         if memory[0] == rules:
 
@@ -224,6 +243,15 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
 
         tokens += prompt_tokens
 
+        # Strip the machine-read STATE line (ROADMAP 2.3) before the response
+        # is stored anywhere; the parsed changes are applied at the end of
+        # the turn, after the summary phase, so a crash there backs up a
+        # progression consistent with the backed-up chatlogs.
+        if progression is not None:
+            response_text, state_changes = parse_state_changes(response_text)
+        else:
+            state_changes = []
+
         chatlogs.append({
             'role':'assistant',
             'content':response_text
@@ -252,7 +280,7 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
         if old_sections is not None:
             affected_sections = [
                 header for header in SECTION_HEADERS
-                if header in _classify_exchange(action, response_text)
+                if header in _affected_sections(action, response_text, bool(state_changes))
             ]
         else:
             # Doesn't match the expected three-section structure (e.g. a
@@ -386,9 +414,29 @@ Latest interactions:
                     print("WARNING: No valid summary candidates contained the required section(s); keeping the previous summary.")
 
         # Post-summary trim: trim persistent memory using updated summary's actual token cost
-        _trim_to_memory_budget(memory, rules['content'], hierarchical_summary, character_text)
+        _trim_to_memory_budget(memory, rules['content'], hierarchical_summary,
+                               character_text + progression_text)
 
         context_logs.append(context)
+
+        # Progression bookkeeping (ROADMAP 2.3): apply the turn's STATE-line
+        # changes, then handle any level-up or death they caused.
+        if progression is not None:
+            apply_state_changes(progression, state_changes)
+            if character is not None and pending_level_ups(progression) > 0:
+                prompt_level_up(progression, character)
+            if is_dead(progression):
+                if prompt_death(progression):
+                    revival = {
+                        'role': 'user',
+                        'content': f'(The character died but was resurrected by forces unknown, '
+                                   f'awakening with {progression.hp} HP. Continue the story from their revival.)'
+                    }
+                    chatlogs.append(revival)
+                    memory.append(revival)
+                else:
+                    save()
+                    quit()
 
     except KeyboardInterrupt:
 

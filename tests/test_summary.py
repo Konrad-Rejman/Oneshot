@@ -9,6 +9,7 @@ from context import (
     SECTION_HEADERS,
     STATUS_CHANGE_KEYWORDS,
     SUMMARY_UPDATE_INTERVAL,
+    _affected_sections,
     _apply_forced_update,
     _build_summary,
     _classify_exchange,
@@ -174,3 +175,23 @@ class TestClassifyExchange:
         # lowercase to ever match.
         for keyword in QUEST_RESOLUTION_KEYWORDS + STATUS_CHANGE_KEYWORDS:
             assert keyword == keyword.lower()
+
+
+class TestAffectedSections:
+    # _classify_exchange plus the ROADMAP 2.3 STATE-line signal: a turn whose
+    # STATE line reported a mechanical change always touches PLAYER STATUS,
+    # even when the (state-line-stripped) narration dodges the keyword lists.
+    def test_state_change_forces_player_status(self):
+        affected = _affected_sections('I duck behind the crates',
+                                      'The bolt grazes you as you dive.', True)
+        assert affected == {'PLAYER STATUS'}
+
+    def test_no_state_change_matches_plain_classification(self):
+        action, response = 'I look around', 'The corridor stretches into darkness.'
+        assert (_affected_sections(action, response, False)
+                == _classify_exchange(action, response) == set())
+
+    def test_state_change_adds_to_keyword_sections(self):
+        affected = _affected_sections('I finish him off',
+                                      'You defeated the warlord.', True)
+        assert affected == set(SECTION_HEADERS)

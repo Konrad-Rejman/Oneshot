@@ -4,6 +4,7 @@ import pandas as pd
 from context import context_update
 from scenarios import choose_scenario
 from character import choose_character, Character, DEFAULT_CHARACTER
+from progression import Progression, new_progression, prompt_starting_spell_slots
 from saves import choose_save, prompt_session_save, prompt_transcript_export, format_transcript_text
 
 # Model setup
@@ -30,6 +31,16 @@ rules = {'role': 'system', 'content':
     CHARACTER:
     The system message contains a CHARACTER SHEET describing the player character, with six stats rated 1 to 10, where 5 is an average person and 10 is peak mortal ability. When the player attempts an action, judge it through the most relevant stat, and name that stat when you call for a roll ("Roll a Dexterity check..."). If the relevant stat is 8 or higher, treat the roll result as one consequence tier better; if it is 3 or lower, treat it as one tier worse. Never shift a natural 20 or natural 1. Let the character's race, class and background inform what they can plausibly know or attempt, and weave their listed traits into the narration where natural.
 
+    PROGRESSION:
+    The system message contains a STATUS block listing the character's current HP, level, XP, spell slots, inventory and features. Treat it as the single source of truth and never contradict it: narrate wounds consistently with the listed HP, do not let the player cast a spell without a remaining spell slot of the right level, and only let them use items the inventory lists. Failed checks with physical danger should cost HP; rest and healing restore it. Award 10 to 50 XP when the player overcomes a meaningful challenge. If HP reaches 0 the character falls; narrate the fall and stop - what happens after death is handled outside the story.
+
+    STATE LINE:
+    End every reply with exactly one final line reporting this turn's mechanical changes, in exactly this form:
+    STATE: HP -3; XP +25; GAIN torch; LOSE rope; SLOT 1 -1
+    Available entries: HP +N or HP -N for healing or damage, XP +N for experience awarded, GAIN <item> or LOSE <item> for inventory changes, SLOT <level> -1 when a spell slot is spent. Separate entries with semicolons. Include only what actually changed this turn; if nothing changed mechanically, end with:
+    STATE: none
+    The state line is machine-read bookkeeping, not narration: keep it to that exact format, never mention it to the player, and never report a change in the narration without also reporting it in the state line.
+
     OUTPUT FORMAT:
     Output plain text only. Do not use markdown, special characters (*, **, #, -), bullet points, bold, or italics. Write in clear sentences and paragraphs. Check the output against all rules above before producing it; correct any violation before outputting.'''
 }
@@ -37,7 +48,7 @@ rules = {'role': 'system', 'content':
 # Session state persisted across runs: written to backup.pkl on a crash and
 # to a named save slot (saves.py, as JSON) when the player keeps the story.
 # Both restore through restore_session(), so the keys must stay in sync.
-def session_state(chatlogs, context_logs, memory, tokens, summary, character):
+def session_state(chatlogs, context_logs, memory, tokens, summary, character, progression):
     return {
         'User': user,
         'Chat Logs': chatlogs,
@@ -46,7 +57,8 @@ def session_state(chatlogs, context_logs, memory, tokens, summary, character):
         'Playtime': playtime,
         'Memory': memory,
         'Summary': summary,
-        'Character': character.to_dict()
+        'Character': character.to_dict(),
+        'Progression': progression.to_dict()
     }
 
 # Unpack persisted session state (backup.pkl or a named save slot) into the
@@ -55,8 +67,11 @@ def restore_session(data):
     # Saves from before the character system carry no sheet; fall back to the default
     character_data = data.get('Character')
     character = Character.from_dict(character_data) if character_data else DEFAULT_CHARACTER
+    # Version-1 saves carry no progression (ROADMAP 2.3); start a fresh one
+    progression_data = data.get('Progression')
+    progression = Progression.from_dict(progression_data) if progression_data else new_progression(character)
     return (data['User'], data['Chat Logs'], data['Context Logs'], data['Tokens'],
-            data['Playtime'], data['Memory'], data['Summary'], character)
+            data['Playtime'], data['Memory'], data['Summary'], character, progression)
 
 # Run on exit
 def save():
@@ -124,7 +139,7 @@ def save():
     # menu) and to export the transcript as plain text or Markdown. A second
     # Ctrl+C here just skips the offers - the session files are already written.
     try:
-        state = session_state(chatlogs, context_logs, memory, tokens, summary, character)
+        state = session_state(chatlogs, context_logs, memory, tokens, summary, character, progression)
         slot_name = prompt_session_save(state)
         prompt_transcript_export(chatlogs, slot_name if slot_name else file_name)
     except KeyboardInterrupt:
@@ -136,7 +151,7 @@ def backup(chatlogs, context_logs, memory, tokens):
     playtime[-1].append(time.time()) # Add current time as endtime to last session
 
     # Save backup data
-    backup_data = session_state(chatlogs, context_logs, memory, tokens, summary, character)
+    backup_data = session_state(chatlogs, context_logs, memory, tokens, summary, character, progression)
     pickle.dump(backup_data, open('backup.pkl', 'wb'))
 
 # Check that ollama is running
@@ -165,7 +180,7 @@ except Exception:
 if 'backup.pkl' in os.listdir():
     # Load backup data
     backup_data = pickle.load(open('backup.pkl', 'rb'))
-    user, chatlogs, context_logs, tokens, playtime, memory, summary, character = restore_session(backup_data)
+    user, chatlogs, context_logs, tokens, playtime, memory, summary, character, progression = restore_session(backup_data)
     playtime.append([time.time()]) # Add current session starttime
 
 else:
@@ -180,7 +195,7 @@ else:
     saved_state = choose_save()
 
     if saved_state is not None:
-        user, chatlogs, context_logs, tokens, playtime, memory, summary, character = restore_session(saved_state)
+        user, chatlogs, context_logs, tokens, playtime, memory, summary, character, progression = restore_session(saved_state)
         playtime.append([time.time()]) # Add current session starttime
 
         # Re-print the last GM message so the player remembers where the story left off
@@ -197,6 +212,9 @@ else:
 
         # Select/create/delete the character this session is played as
         character = choose_character()
+
+        # Starting HP comes from Constitution; spell slots from one question
+        progression = new_progression(character, prompt_starting_spell_slots())
 
         # Conversation history
         chatlogs = [{'role': 'assistant', 'content': startMessage}] # Full chat history
@@ -215,4 +233,4 @@ else:
 # context_update. Not persisted: resuming a session just restarts the count.
 turns_since_summary_update = 0
 while True:
-    tokens, memory, summary, turns_since_summary_update = context_update(chatlogs, context_logs, memory, rules, summary, tokens, save, backup, character, turns_since_summary_update)
+    tokens, memory, summary, turns_since_summary_update = context_update(chatlogs, context_logs, memory, rules, summary, tokens, save, backup, character, turns_since_summary_update, progression)

@@ -35,6 +35,9 @@ STATE = {
     'Summary': 'OVERALL STORY: x\n\nCURRENT QUEST: y\n\nPLAYER STATUS: z',
     'Character': {'name': 'A', 'race': 'Human', 'char_class': 'Wanderer',
                   'background': 'b', 'stats': {}},
+    'Progression': {'max_hp': 11, 'hp': 8, 'level': 2, 'xp': 130,
+                    'spell_slots': {'1': 1}, 'spell_slots_max': {'1': 2},
+                    'inventory': ['rope'], 'features': ['Second Wind']},
 }
 
 
