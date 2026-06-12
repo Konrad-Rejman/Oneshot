@@ -141,4 +141,4 @@ The fine-tuned weights are deliberately **not distributed** — the public repos
 
 - **Apache 2.0 (Mistral base):** ship the `NOTICE` file crediting Mistral AI if the weights are ever published
 
-The MIT (LIGHT) and CC BY 4.0 (SRD) lines from the original plan no longer apply — those sources are not in the dataset. The project's existing Apache 2.0 licence covers the code. The full UK-law rationale (including why s29A CDPA is never relied on) is recorded in `training/COMPLIANCE.md`.
+The MIT (LIGHT) and CC BY 4.0 (SRD) lines from the original plan no longer apply — those sources are not in the dataset. The project's existing Apache 2.0 licence covers the code. The full UK-law rationale is recorded in `training/COMPLIANCE.md`.

@@ -1,4 +1,5 @@
-'''Layer 1: every top-level source file must at least compile.
+'''
+Layer 1: every top-level source file must at least compile.
 
 Uses py_compile (no import), so main.py's interactive top-level code never runs.
 The top-level glob naturally excludes .venv312, __pycache__ and tests/.

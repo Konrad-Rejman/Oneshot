@@ -62,7 +62,7 @@ The base model is never replaced: if you build the fine-tuned model and register
 python -m pytest tests -q
 ```
 
-The test suite checks the deterministic game logic — token-budget trimming, summary parsing and candidate scoring, the D20 roll format, character validation, the progression rules (HP/XP/spell-slot bookkeeping, level-ups, death and resurrection), the terminal UI's colour rules (dice tiers, HP thresholds) and rendered status values, and the scenario, character and save-slot storage formats — and runs in under a second. It doesn't need Ollama running or the spaCy/BERTScore models downloaded, so it works before full setup is complete.
+The test suite checks the deterministic game logic — token-budget trimming, summary parsing and candidate scoring, the D20 roll format, character validation, the progression rules (HP/XP/spell-slot bookkeeping, level-ups, death and resurrection), the terminal UI's colour rules (dice tiers, HP thresholds) and rendered status values, the scenario, character and save-slot storage formats, the model toggle's name matching, and the training pipeline's validators and spec sampling — and runs in under a second. It doesn't need Ollama running or the spaCy/BERTScore models downloaded, so it works before full setup is complete.
 
 When editing the project with Claude Code, a hook runs the suite automatically after every change to a Python file and reports any failures.
 

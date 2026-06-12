@@ -1,4 +1,5 @@
-'''Terminal presentation layer (ROADMAP 2.4), built on rich.
+'''
+Terminal presentation layer (ROADMAP 2.4), built on rich.
 
 Every print/input in the game goes through this module: GM narrative scrolls
 above, and each turn ends with a status-bar panel (character name, HP, level,

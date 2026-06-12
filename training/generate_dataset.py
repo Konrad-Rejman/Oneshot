@@ -1,4 +1,5 @@
-'''Synthetic training-data generator for Phase 3 (ROADMAP 3.1).
+'''
+Synthetic training-data generator for Phase 3 (ROADMAP 3.1).
 
 Every example is one full game turn in the exact shape the model sees in
 production: the prompt is assembled with the same code the game uses
@@ -106,8 +107,10 @@ def action_prompt(spec, scene):
 
 
 def build_gm_memory(spec, summary, scene, action):
-    '''The production turn-1 memory layout (context.py:context_update):
-    [rules + sheet + STATUS + rolls, summary, opening scene, action].'''
+    '''
+    The production turn-1 memory layout (context.py:context_update):
+    [rules + sheet + STATUS + rolls, summary, opening scene, action].
+    '''
     rules_content = (
         RULES_TEXT
         + '\n\n' + spec['character'].to_prompt()
@@ -125,8 +128,10 @@ def build_gm_memory(spec, summary, scene, action):
 # --- generation ----------------------------------------------------------
 
 def generate_stage(prompt, validate, model, num_predict, timeout, attempts, rejections):
-    '''Generate one auxiliary stage (summary/scene/action), retrying with a
-    higher temperature on validation failure. Returns text or None.'''
+    '''
+    Generate one auxiliary stage (summary/scene/action), retrying with a
+    higher temperature on validation failure. Returns text or None.
+    '''
     for attempt in range(attempts):
         temperature = CANDIDATE_TEMPERATURES[min(attempt, len(CANDIDATE_TEMPERATURES) - 1)]
         text = call_ollama(prompt, model, temperature, num_predict, timeout)
@@ -138,8 +143,10 @@ def generate_stage(prompt, validate, model, num_predict, timeout, attempts, reje
 
 
 def generate_example(spec, model, candidates, timeout, attempts, rejections):
-    '''Run all four stages for one spec. Returns a dataset record dict or
-    None when any stage failed validation on every attempt.'''
+    '''
+    Run all four stages for one spec. Returns a dataset record dict or
+    None when any stage fails validation on every attempt.
+    '''
     summary = generate_stage(summary_prompt(spec), validators.validate_summary,
                              model, 300, timeout, attempts, rejections)
     if summary is None:

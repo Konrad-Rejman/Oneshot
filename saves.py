@@ -1,16 +1,15 @@
-'''Named save slots, startup load menu, and transcript export (ROADMAP 2.2).
+'''
+Named save slots, startup load menu, and transcript export (ROADMAP 2.2).
 
 A save slot is a single JSON file in SAVES_DIR carrying the same state keys
 as backup.pkl ('User', 'Chat Logs', 'Context Logs', 'Tokens', 'Playtime',
 'Memory', 'Summary', 'Character', 'Progression'), plus 'Version' and 'Name'
 added on write. Version history:
-- 1: the original key set, no 'Progression'
-- 2: ROADMAP 2.3 added the 'Progression' key (HP/spell slots/inventory/XP);
-  version-1 saves load fine - main.py:restore_session falls back to a fresh
-  progression when the key is absent
-Future phases should keep extending the state dict with new keys and bumping
-SAVE_VERSION rather than changing the existing keys, so old saves stay
-loadable.
+- 1: the initial key set, no 'Progression'
+- 2: adds the 'Progression' key (ROADMAP 2.3 - HP/spell slots/inventory/XP);
+  version-1 saves load with a fresh progression (main.py:restore_session)
+New state belongs in new keys with a SAVE_VERSION bump - never a change to
+the existing keys - so old saves stay loadable.
 '''
 import json, os, re, time
 

@@ -1,4 +1,5 @@
-'''Loose contract for model.py:_build_prompt_from_memory, plus the
+'''
+Loose contract for model.py:_build_prompt_from_memory, plus the
 deterministic parts of the model toggle (ROADMAP 3): name matching against
 the installed-model list and the active-model switch. installed_models()
 itself queries Ollama and is deliberately untested.

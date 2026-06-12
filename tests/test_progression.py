@@ -1,8 +1,9 @@
-'''Contracts for progression.py: Progression validation, dict round-trip,
+'''
+Contracts for progression.py: Progression validation, dict round-trip,
 the XP/level curve, level-up and death/resurrection mechanics, and STATE-line
 parsing/application (ROADMAP 2.3). Deliberately avoids the interactive
-prompts - ROADMAP Phase 2.4 reworks the UI; the dataclass, the STATE-line
-grammar and the clamping rules are what must stay stable.
+prompts; the dataclass, the STATE-line grammar and the clamping rules are
+what must stay stable.
 '''
 import json
 

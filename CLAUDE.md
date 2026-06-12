@@ -53,6 +53,11 @@ The tests deliberately do NOT assert on (see ROADMAP.md):
 
 When implementing roadmap items, extend the suite to cover the new deterministic logic the same way (pure functions tested directly; Ollama/model calls never invoked).
 
+## Comment Style
+
+- Comments and docstrings are matter-of-fact present tense: state what the code does, takes and returns ("Parses the STATE line; returns (clean_text, changes)") — never narrate history or intent ("this now does", "this was meant to", "X was replaced by Y"). A bare roadmap cross-reference like "(ROADMAP 2.3)" is fine.
+- Multi-line docstrings open with `'''` on its own line; the text starts on the next line, and the closing `'''` is also on its own line. Single-line docstrings stay on one line. This applies to docstrings, not to multi-line string *data* (the rules prompt, scenario text).
+
 ## Architecture
 
 The game runs as a terminal loop where the LLM plays a D&D-style Game Master.

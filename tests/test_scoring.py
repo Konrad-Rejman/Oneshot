@@ -1,4 +1,5 @@
-'''Behavior contracts for the BERTScore composite candidate scoring in
+'''
+Behavior contracts for the BERTScore composite candidate scoring in
 scoring.py (ROADMAP Phase 1.3). The BERT model is never loaded and no network
 is touched: the metric helpers are monkeypatched so only the deterministic
 composite/selection logic is exercised.

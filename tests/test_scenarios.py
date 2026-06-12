@@ -1,6 +1,7 @@
-'''Contracts for scenarios.py: summary parsing and the scenarios.json
-on-disk format. Deliberately avoids the interactive menus — ROADMAP Phase 2
-reworks the UI; the file format and parsing are what must stay stable.
+'''
+Contracts for scenarios.py: summary parsing and the scenarios.json
+on-disk format. Deliberately avoids the interactive menus; the file format
+and parsing are what must stay stable.
 
 CRUD tests redirect SCENARIOS_FILE to tmp_path so the real (gitignored)
 scenarios.json is never touched.

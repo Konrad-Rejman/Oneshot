@@ -22,8 +22,10 @@ def active_model():
     return MODEL_NAME
 
 def installed_models():
-    '''Model names installed in the local Ollama (empty list if the query
-    fails - the game then just keeps the base model).'''
+    '''
+    Model names installed in the local Ollama (empty list if the query
+    fails - the game then keeps the base model).
+    '''
     try:
         resp = requests.get(OLLAMA_TAGS_API, timeout=5)
         return [m.get('name', '') for m in resp.json().get('models', [])]

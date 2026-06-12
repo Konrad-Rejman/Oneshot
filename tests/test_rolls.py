@@ -1,10 +1,10 @@
-'''Contract for rolls.py: five D20 values, reproducible under seeding.
+'''
+Contract for rolls.py: five D20 values, reproducible under seeding.
 
 The numbers are parsed from after the colon — the preamble itself contains
-a digit ("D20") that must not be counted. ROADMAP 2.4 split the generation
-(roll_values) from the message rendering (rolls_message) so the UI can show
-the same values colour-coded; rolls() must stay equivalent to composing the
-two.
+a digit ("D20") that must not be counted. rolls.py separates generation
+(roll_values) from message rendering (rolls_message) so the UI can show the
+same values colour-coded; rolls() must stay equivalent to composing the two.
 '''
 import random
 import re

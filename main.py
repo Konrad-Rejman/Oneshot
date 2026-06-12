@@ -188,7 +188,7 @@ else:
 
         # Conversation history
         chatlogs = [{'role': 'assistant', 'content': startMessage}] # Full chat history
-        context_logs = [] # Memory history, what was in models memory at each prompt
+        context_logs = [] # The model's memory contents at each prompt
 
         # Memory
         memory = [rules, {'role': 'assistant', 'content': startMessage}] # Model context

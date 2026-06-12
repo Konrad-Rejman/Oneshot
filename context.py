@@ -202,7 +202,8 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
         # Current HP/level/slots/inventory (ROADMAP 2.3), surfaced the same
         # way as the character sheet so the model references them accurately.
         progression_text = '\n\n' + progression.to_prompt() if progression else ''
-        # Preserve original rules content so we can restore it later
+        # The bare rules content, restored after the model call strips the
+        # turn's appended sheet/STATUS/rolls
         original_rules_content = rules['content']
         rules['content'] = original_rules_content + character_text + progression_text + turn_rolls_message
 

@@ -1,4 +1,5 @@
-'''Spec sampling for the Phase 3 training pipeline (training/specs.py).
+'''
+Spec sampling for the Phase 3 training pipeline (training/specs.py).
 
 The samplers must only ever produce specs the game itself considers valid:
 the Character/Progression constructors validate on construction, so most of

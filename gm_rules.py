@@ -1,14 +1,15 @@
-'''The production GM rules system prompt (ROADMAP 1.1).
+'''
+The production GM rules system prompt (ROADMAP 1.1).
 
-Lives in its own module (rather than main.py, which runs interactive code at
-import time) so the Phase 3 training pipeline (training/) can embed the exact
-prompt the game uses - the roadmap requires the fine-tuning data to keep the
-production prompt and the training prompt in sync, and importing one constant
-from both places makes drift impossible.
+Lives in its own importable module rather than main.py (which runs
+interactive code at import time) so the game and the Phase 3 training
+pipeline (training/) share one copy - the fine-tuning data must use the
+exact production prompt, and importing one constant from both places makes
+drift impossible.
 
 Tests deliberately do not assert on this text (see CLAUDE.md), so it can be
 iterated freely - but any change here changes the training data too, so the
-dataset should be regenerated after editing it.
+dataset must be regenerated after editing it.
 '''
 
 RULES_TEXT = '''PERSONA:
@@ -46,8 +47,7 @@ RULES_TEXT = '''PERSONA:
     OUTPUT FORMAT:
     Output plain text only. Do not use markdown, special characters (*, **, #, -), bullet points, bold, or italics. Write in clear sentences and paragraphs. Check the output against all rules above before producing it; correct any violation before outputting.'''
 
-# The message dict the game passes around; main.py mutates rules['content']
-# per turn (appending the character sheet, STATUS block and rolls) and
-# restores it, so this must stay a single shared module-level object exactly
-# as it was when defined in main.py.
+# The message dict the game passes around. context_update mutates
+# rules['content'] per turn (appending the character sheet, STATUS block and
+# rolls) and restores it, so this must be a single shared module-level object.
 rules = {'role': 'system', 'content': RULES_TEXT}

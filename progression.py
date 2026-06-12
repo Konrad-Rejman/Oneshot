@@ -1,4 +1,5 @@
-'''Character progression: HP, spell slots, inventory, XP, levels, and death
+'''
+Character progression: HP, spell slots, inventory, XP, levels, and death
 (ROADMAP 2.3).
 
 The GM model reports each turn's mechanical changes in a machine-read STATE
@@ -134,8 +135,10 @@ def starting_max_hp(constitution):
     return STARTING_HP_BASE + constitution
 
 def new_progression(character, level_1_slots=0):
-    '''Fresh level-1 progression for the given Character: max HP from
-    Constitution, optional starting level-1 spell slots, empty inventory.'''
+    '''
+    Fresh level-1 progression for the given Character: max HP from
+    Constitution, optional starting level-1 spell slots, empty inventory.
+    '''
     hp = starting_max_hp(character.stats['Constitution'])
     slots = {'1': level_1_slots} if level_1_slots > 0 else {}
     return Progression(max_hp=hp, hp=hp, spell_slots=dict(slots), spell_slots_max=dict(slots))
@@ -153,30 +156,38 @@ def pending_level_ups(progression):
     return level_for_xp(progression.xp) - progression.level
 
 def level_up(progression):
-    '''Advance one level: +HP_PER_LEVEL max HP, fully healed, spell slots
+    '''
+    Advance one level: +HP_PER_LEVEL max HP, fully healed, spell slots
     restored. The class-feature choice is applied separately (increase_stat /
-    grant_feature / grant_spell_slot). Mutates in place.'''
+    grant_feature / grant_spell_slot). Mutates in place.
+    '''
     progression.level += 1
     progression.max_hp += HP_PER_LEVEL
     progression.hp = progression.max_hp
     progression.spell_slots = dict(progression.spell_slots_max)
 
 def increase_stat(character, stat):
-    '''Level-up choice: +1 to the named stat, capped at STAT_MAX.
-    Returns False (and changes nothing) for an unknown or maxed stat.'''
+    '''
+    Level-up choice: +1 to the named stat, capped at STAT_MAX.
+    Returns False (and changes nothing) for an unknown or maxed stat.
+    '''
     if stat not in character.stats or character.stats[stat] >= STAT_MAX:
         return False
     character.stats[stat] += 1
     return True
 
 def grant_feature(progression, feature):
-    '''Level-up choice: record a named class feature, surfaced to the model
-    in the STATUS block.'''
+    '''
+    Level-up choice: record a named class feature, surfaced to the model
+    in the STATUS block.
+    '''
     progression.features.append(feature)
 
 def grant_spell_slot(progression, slot_level):
-    '''Level-up choice: one more maximum (and current) spell slot of the
-    given level ('1'-'9'). Returns False for an invalid slot level.'''
+    '''
+    Level-up choice: one more maximum (and current) spell slot of the
+    given level ('1'-'9'). Returns False for an invalid slot level.
+    '''
     slot_level = str(slot_level)
     if slot_level not in SPELL_SLOT_LEVELS:
         return False
@@ -188,8 +199,10 @@ def is_dead(progression):
     return progression.hp <= 0
 
 def resurrect(progression):
-    '''Bring a dead character back: half max HP (at least 1) and an XP
-    penalty floored at the current level, so no level is ever lost.'''
+    '''
+    Bring a dead character back: half max HP (at least 1) and an XP
+    penalty floored at the current level, so no level is ever lost.
+    '''
     progression.hp = max(1, progression.max_hp // 2)
     progression.xp = max(xp_for_level(progression.level), progression.xp - RESURRECTION_XP_PENALTY)
 

@@ -1,7 +1,7 @@
-'''Contracts for character.py: Character validation, dict round-trip, and
+'''
+Contracts for character.py: Character validation, dict round-trip, and
 the characters.json on-disk format. Deliberately avoids the interactive
-menus - ROADMAP Phase 2 reworks the UI; the dataclass and file format are
-what must stay stable.
+menus; the dataclass and file format are what must stay stable.
 
 CRUD tests redirect CHARACTERS_FILE to tmp_path so a real characters.json
 is never touched.

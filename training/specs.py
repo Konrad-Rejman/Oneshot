@@ -1,4 +1,5 @@
-'''Structural scenario specs for the Phase 3 training pipeline (ROADMAP 3.1).
+'''
+Structural scenario specs for the Phase 3 training pipeline (ROADMAP 3.1).
 
 A spec is the *parameters* of one training example - location/threat/goal
 keywords, the action kind and its stat, a sampled character and progression,

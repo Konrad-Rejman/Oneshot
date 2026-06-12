@@ -1,4 +1,5 @@
-'''Behavior contracts for the token-budget logic in context.py.
+'''
+Behavior contracts for the token-budget logic in context.py.
 
 These protect the memory-trimming guarantees described in CLAUDE.md: the
 prompt never exceeds TOKEN_LIMIT, and rules / summary / the current action

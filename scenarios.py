@@ -20,10 +20,9 @@ _SECTION_PATTERN = re.compile(
     re.IGNORECASE | re.DOTALL
 )
 
-# The original hardcoded opening scene and summary, kept as the always-available
-# starting point. Can later add scenarios here the same way custom ones are added 
-# - by handing {'startMessage', 'summary'} to add_scenario() once it can generate
-# them from a character sheet.
+# The always-available default opening scene and summary. Generated openings
+# (ROADMAP 1.2, pending) belong in add_scenario() as {'startMessage',
+# 'summary'} dicts, the same shape custom scenarios use.
 DEFAULT_SCENARIO = {
     'startMessage': '''You stir as the first light of dawn filters through a canopy of tangled branches. The air is cold and damp, the scent of pine and earth filling your lungs. When you sit up, you find yourself lying on a rough, moss-covered road that cuts through the forest like a scar. The twisted wreckage of a caravan lies beside you.
 

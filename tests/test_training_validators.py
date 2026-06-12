@@ -1,4 +1,5 @@
-'''Validators gating the Phase 3 training data (training/validators.py).
+'''
+Validators gating the Phase 3 training data (training/validators.py).
 
 These are the quality filters whose behaviour the fine-tune bakes in, so
 they are tested like the game's other deterministic logic: pure string

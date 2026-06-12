@@ -1,4 +1,5 @@
-'''Deterministic validators for the Phase 3 training pipeline (ROADMAP 3.1).
+'''
+Deterministic validators for the Phase 3 training pipeline (ROADMAP 3.1).
 
 Every piece of generated text (scene, summary, player action, GM response)
 passes through these checks before it may enter the dataset; the fine-tune
@@ -168,8 +169,10 @@ def validate_gm_response(text, pool, require_check=True,
 
 
 def validate_scene(text, min_chars=100, max_chars=1200):
-    '''Gate for a generated opening scene: like a GM response but with no
-    STATE line and no dice rolled - nothing is being resolved yet.'''
+    '''
+    Gate for a generated opening scene: like a GM response but with no
+    STATE line and no dice rolled - nothing is being resolved yet.
+    '''
     reasons = (
         check_length(text, min_chars, max_chars)
         + check_plain_text(text)
@@ -197,8 +200,10 @@ def validate_action(text, min_chars=10, max_chars=300):
 
 
 def validate_summary(text, max_chars=1200):
-    '''Gate for a generated three-section summary: all three headers present
-    in order at line starts, each with a non-empty body, plain text.'''
+    '''
+    Gate for a generated three-section summary: all three headers present
+    in order at line starts, each with a non-empty body, plain text.
+    '''
     reasons = check_plain_text(text) + check_no_state_line(text)
     if len(text) > max_chars:
         reasons.append(f'too long ({len(text)} > {max_chars} chars)')

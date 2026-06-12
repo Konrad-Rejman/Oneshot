@@ -1,4 +1,5 @@
-'''Deterministic logic in ui.py (ROADMAP 2.4): the pure style helpers, plus
+'''
+Deterministic logic in ui.py (ROADMAP 2.4): the pure style helpers, plus
 capture-based checks that the dice line and status bar render the right
 values. Pure rendering aesthetics (colours on the wire, box characters) are
 deliberately not asserted on - only that the data the player needs is there.

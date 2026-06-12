@@ -1,7 +1,7 @@
-'''Contracts for saves.py: save-slot name sanitisation, the saves/ on-disk
+'''
+Contracts for saves.py: save-slot name sanitisation, the saves/ on-disk
 format, and transcript formatting/export. Deliberately avoids the interactive
-menus — ROADMAP Phase 2.4 reworks the UI; the file format is what must stay
-stable.
+menus; the file format is what must stay stable.
 
 CRUD tests redirect SAVES_DIR/EXPORTS_DIR to tmp_path so real player saves
 are never touched.

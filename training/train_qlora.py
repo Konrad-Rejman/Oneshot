@@ -1,4 +1,5 @@
-'''QLoRA fine-tune of the GM model (ROADMAP 3.2) - free-tier cloud script.
+'''
+QLoRA fine-tune of the GM model (ROADMAP 3.2) - free-tier cloud script.
 
 This does NOT run on the development machine (6 GB VRAM is too small and
 Unsloth needs Linux); it is written for a free Kaggle GPU notebook:
