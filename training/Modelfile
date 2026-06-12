@@ -1,0 +1,17 @@
+# Registers the fine-tuned GM model with the local Ollama (ROADMAP 3):
+#
+#   ollama create oneshot-gm -f training/Modelfile
+#
+# Run from the directory containing the GGUF downloaded from the training
+# run (train_qlora.py), or adjust the FROM path. The model name "oneshot-gm"
+# is what the game's startup toggle looks for (model.py:FINETUNED_MODEL_NAME).
+#
+# The template matches what `ollama show --modelfile mistral:instruct`
+# wraps prompts in, so the fine-tuned model sees requests in exactly the
+# same shape as the base model and as the training data.
+FROM ./oneshot-gm.Q4_K_M.gguf
+
+TEMPLATE """[INST] {{ if .System }}{{ .System }} {{ end }}{{ .Prompt }} [/INST]"""
+
+PARAMETER stop "[INST]"
+PARAMETER stop "[/INST]"

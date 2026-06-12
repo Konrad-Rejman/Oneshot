@@ -8,3 +8,7 @@ data.csv
 .claude/settings.local.json
 saves
 exports
+training/data/
+training/private/
+training/outputs/
+*.gguf

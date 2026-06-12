@@ -1,5 +1,5 @@
 from rolls import roll_values, rolls_message
-from model import generate_response
+from model import generate_response, active_model
 import ui
 from scoring import select_best_candidate
 from progression import (
@@ -179,9 +179,10 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
         old_tokens = copy.deepcopy(tokens)
 
         # Status bar (ROADMAP 2.4) above the pinned input line: name, HP,
-        # level, XP, cumulative tokens, read straight off the dataclasses.
+        # level, XP, cumulative tokens, read straight off the dataclasses,
+        # plus the active GM model (ROADMAP 3 base/fine-tuned toggle).
         if character is not None and progression is not None:
-            ui.status_bar(character, progression, tokens)
+            ui.status_bar(character, progression, tokens, active_model())
         action = ui.ask("Describe the players' actions:")
 
         chatlogs.append({

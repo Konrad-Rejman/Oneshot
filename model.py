@@ -3,7 +3,68 @@ import json
 import ui
 
 OLLAMA_API = "http://localhost:11434/api/generate"
-MODEL_NAME = "mistral:instruct"
+OLLAMA_TAGS_API = "http://localhost:11434/api/tags"
+
+# Model toggle (ROADMAP 3): the base model is always available; the
+# fine-tuned model (training/, registered with `ollama create oneshot-gm`)
+# is offered at startup when installed. MODEL_NAME is the active model used
+# by generate_response - switch it only through set_active_model.
+BASE_MODEL_NAME = "mistral:instruct"
+FINETUNED_MODEL_NAME = "oneshot-gm"
+MODEL_NAME = BASE_MODEL_NAME
+
+def set_active_model(name):
+    '''Switch the model generate_response uses for the rest of the session.'''
+    global MODEL_NAME
+    MODEL_NAME = name
+
+def active_model():
+    return MODEL_NAME
+
+def installed_models():
+    '''Model names installed in the local Ollama (empty list if the query
+    fails - the game then just keeps the base model).'''
+    try:
+        resp = requests.get(OLLAMA_TAGS_API, timeout=5)
+        return [m.get('name', '') for m in resp.json().get('models', [])]
+    except Exception:
+        return []
+
+def is_installed(name, installed):
+    '''
+    True if name matches an installed model exactly, or matches one ignoring
+    its tag: "oneshot-gm" matches "oneshot-gm:latest". A name that carries
+    its own tag ("mistral:instruct") must match exactly.
+    '''
+    if ':' in name:
+        return name in installed
+    return any(entry == name or entry.split(':', 1)[0] == name for entry in installed)
+
+def choose_model():
+    '''
+    Startup model toggle: when the fine-tuned model is installed in Ollama,
+    ask which model runs the GM this session (blank defaults to base, so
+    evaluation sessions are an explicit choice); when it is not installed,
+    keep the base model without showing a menu. Returns the active model.
+    '''
+    if not is_installed(FINETUNED_MODEL_NAME, installed_models()):
+        set_active_model(BASE_MODEL_NAME)
+        return MODEL_NAME
+    ui.menu('Choose the Game Master model for this session:', [
+        f'{BASE_MODEL_NAME} (base)',
+        f'{FINETUNED_MODEL_NAME} (fine-tuned)',
+    ])
+    while True:
+        choice = ui.ask('Model (blank for base):').strip()
+        if choice in ('', '1'):
+            set_active_model(BASE_MODEL_NAME)
+            break
+        if choice == '2':
+            set_active_model(FINETUNED_MODEL_NAME)
+            break
+        ui.warn('Please enter 1, 2, or leave blank for the base model.')
+    ui.system(f'Game Master model: {MODEL_NAME}')
+    return MODEL_NAME
 
 def _build_prompt_from_memory(memory):
     parts = []

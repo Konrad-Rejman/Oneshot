@@ -129,10 +129,12 @@ def dice(values):
         line.append(str(value), style=roll_style(value))
     console.print(line)
 
-def status_bar(character, progression, tokens):
+def status_bar(character, progression, tokens, model_name=None):
     '''
     Status panel rendered above each turn's input line: character name as
-    the title, HP (colour-coded), level, XP and cumulative token count.
+    the title, HP (colour-coded), level, XP, cumulative token count and -
+    when given - the active GM model, so evaluation sessions comparing the
+    base and fine-tuned models (ROADMAP 3) are always identifiable.
     '''
     bar = Text()
     bar.append('HP ', style=SYSTEM_STYLE)
@@ -147,6 +149,10 @@ def status_bar(character, progression, tokens):
     bar.append('   ')
     bar.append('Tokens ', style=SYSTEM_STYLE)
     bar.append(str(tokens))
+    if model_name:
+        bar.append('   ')
+        bar.append('Model ', style=SYSTEM_STYLE)
+        bar.append(str(model_name))
     console.print()
     console.print(Panel(bar, title=Text(character.name, style='bold'),
                         title_align='left', border_style=GM_RULE_STYLE,

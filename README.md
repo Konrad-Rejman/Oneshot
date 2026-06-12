@@ -50,6 +50,12 @@ The program will then initialise and start the gameplay loop. Each turn a status
 
 If the program crashes unexpectedly, a `backup.pkl` file is saved with the full session state. The next run will automatically resume from it. Delete `backup.pkl` once it has been loaded to start a fresh session.
 
+## Fine-Tuned GM Model (optional)
+
+The `training/` directory contains a pipeline for fine-tuning the GM model on filtered examples of its own best behaviour — better dice fidelity, cleaner formatting, more reliable state tracking. The training data is fully synthetic and generated locally by the base model itself, so the public repository carries no third-party datasets (see `training/COMPLIANCE.md` for the licensing rationale, and `training/README.md` for how to generate the data and run the training on a free cloud GPU).
+
+The base model is never replaced: if you build the fine-tuned model and register it with Ollama as `oneshot-gm`, the game offers a choice between the two at startup (defaulting to the base model) and shows the active model in the status panel. Without it installed, nothing changes.
+
 ## Testing
 
 ```bash

@@ -35,15 +35,16 @@ The suite (~160 tests, sub-second) covers the deterministic logic only — no Ol
 - `test_context_trim.py` — `_trim_presend` / `_trim_to_memory_budget` / `_estimate_tokens` budget contracts
 - `test_summary.py` — `_parse_sections` / `_build_summary` round-trip, markdown-tolerant header parsing (`**CURRENT QUEST**:`) and `_parse_partial_sections` candidate salvage, `_classify_exchange` keyword routing (prefix matching: stems like `injur` match "injured"; `heal` matching "healthy" is an accepted trade-off)
 - `test_scoring.py` — composite-score weights (0.6/0.2/0.2), candidate selection argmax, lazy-loading contract (metric helpers monkeypatched; BERT never loaded)
-- `test_rolls.py`, `test_model_prompt.py`, `test_scenarios.py` — roll format (incl. the `roll_values`/`rolls_message` split and `rolls()` equivalence), prompt-assembly ordering, scenarios.json file-format CRUD
-- `test_ui.py` — `roll_style` consequence-tier colours, `hp_style` thresholds (green above 2/3, yellow above 1/3, red at/below), capture-based checks that the dice line and status bar render the player-facing values (no colour/box-character assertions)
+- `test_rolls.py`, `test_model_prompt.py`, `test_scenarios.py` — roll format (incl. the `roll_values`/`rolls_message` split and `rolls()` equivalence), prompt-assembly ordering, the model toggle's deterministic parts (`is_installed` name/tag matching, `set_active_model`/`active_model`, base default — `installed_models()` itself queries Ollama and is untested), scenarios.json file-format CRUD
+- `test_ui.py` — `roll_style` consequence-tier colours, `hp_style` thresholds (green above 2/3, yellow above 1/3, red at/below), capture-based checks that the dice line and status bar render the player-facing values incl. the active-model segment (no colour/box-character assertions)
+- `test_training_validators.py`, `test_training_specs.py` — the Phase 3 pipeline's deterministic parts: dataset validators (strict canonical STATE-line grammar — stricter than the runtime parser on purpose — dice announced only as a prefix of the roll pool, plain-text/markdown bans, character-break phrases, per-stage composite gates) and spec sampling (always-valid `Character`/`Progression` state, caster-only spell actions, both tier-shift bands reachable, seed determinism); Ollama is never called
 - `test_character.py` — `Character` stat validation, dict round-trip, characters.json file-format CRUD, `describe_stat` phrase mapping, `to_prompt` content presence
 - `test_progression.py` — `Progression` validation/dict round-trip (JSON-safe), XP curve and level-up effects, death/resurrection clamping, STATE-line grammar (`parse_state_changes`, markdown-tolerant like the summary headers) and `apply_state_changes` clamping rules, `to_prompt` content presence; the interactive level-up/death prompts are deliberately untested
 - `test_saves.py` — save-name sanitisation, `saves/` slot file-format CRUD (state keys incl. `Progression` + `Version`/`Name` metadata round-trip), transcript text formatting, export writing
 
 **A `PostToolUse` hook (`.claude/hooks/run-tests.ps1`, registered in `.claude/settings.json`) runs this suite automatically after every Edit/Write to a project `.py` file and feeds failures back.** If the hook reports a failure after your change, fix the code or — if the behavior change was intentional — update the matching test in the same change. Never disable the hook or delete a test to get past a failure without the user's say-so.
 
-**Rule: any intentional behavior change to memory trimming, summary parsing/classification, the keyword lists, prompt assembly, the STATE-line grammar or progression clamping rules, or the scenarios.json format must update the corresponding tests in the same change.**
+**Rule: any intentional behavior change to memory trimming, summary parsing/classification, the keyword lists, prompt assembly, the STATE-line grammar or progression clamping rules, the scenarios.json format, or the training-data validators/spec samplers must update the corresponding tests in the same change.**
 
 The tests deliberately do NOT assert on (see ROADMAP.md):
 - Rules system-prompt text — Phase 1.1 rewrites it
@@ -55,6 +56,10 @@ When implementing roadmap items, extend the suite to cover the new deterministic
 ## Architecture
 
 The game runs as a terminal loop where the LLM plays a D&D-style Game Master.
+
+**Model toggle (ROADMAP 3):** the rules system prompt lives in `gm_rules.py` (importable — `main.py` runs interactive code at import time) so the game and the training pipeline share one copy. `model.py` knows two models: `BASE_MODEL_NAME` (`mistral:instruct`, always the default) and `FINETUNED_MODEL_NAME` (`oneshot-gm`, the unpublished fine-tune registered via `training/Modelfile`). At startup `choose_model()` queries Ollama's `/api/tags` and offers a per-session base/fine-tuned menu only when the fine-tune is installed; the active model is switched via `set_active_model` (never by reassigning `MODEL_NAME` directly), is not part of saved state, and is shown in the status bar.
+
+**Training pipeline (ROADMAP 3.1/3.2, `training/`):** generates a fully synthetic, self-distilled dataset — the local base model writes every sentence (summary → scene → player action → GM-response candidates) from structural specs (`specs.py`), gated per stage by strict validators (`validators.py`); prompts are assembled with the production code (`gm_rules.RULES_TEXT` + `to_prompt`s + `rolls_message` flattened by `model._build_prompt_from_memory`) so train/inference formats cannot drift — **changing the rules prompt or the `to_prompt` formats means regenerating the dataset**. `train_qlora.py` (Unsloth QLoRA, runs on Kaggle free T4, not locally) exports a Q4_K_M GGUF. `training/data/` and `training/private/` (paid-compute guide) are gitignored; the compliance rationale — synthetic-only, no third-party datasets, no Claude-authored dataset text — is binding and recorded in `training/COMPLIANCE.md`; re-read it before adding any data source.
 
 **Terminal UI (ROADMAP 2.4):** every print/input goes through `ui.py`, a presentation layer built on `rich` — a status-bar panel (name, colour-coded HP, level, XP, tokens) above each turn's input line, GM speech streamed under a `GM` rule, the turn's D20 pool colour-coded by consequence tier (`ui.roll_style`), dim system messages, magenta game events, yellow warnings, red errors. Game text is printed with `markup=False`/`Text()` so brackets in model output are never parsed as markup. Game logic never calls `print`/`input` directly, so a future full-screen TUI (`textual`) only has to reimplement `ui.py`.
 
@@ -86,7 +91,7 @@ The game runs as a terminal loop where the LLM plays a D&D-style Game Master.
 
 ## Key Constants
 
-- `model.py`: `MODEL_NAME = "mistral:instruct"`, `OLLAMA_API = "http://localhost:11434/api/generate"`
+- `model.py`: `BASE_MODEL_NAME = "mistral:instruct"`, `FINETUNED_MODEL_NAME = "oneshot-gm"`, `MODEL_NAME` — the active model (starts as base; switch only via `set_active_model`), `OLLAMA_API = "http://localhost:11434/api/generate"`, `OLLAMA_TAGS_API = "http://localhost:11434/api/tags"`
 - `rolls.py`: `roll_num = 5` — number of D20 rolls per turn (`roll_values()` generates the list, `rolls_message(values)` renders the prompt text, `rolls()` composes the two)
 - `ui.py`: one style constant per output kind (`SYSTEM_STYLE`, `EVENT_STYLE`, `WARN_STYLE`, `ERROR_STYLE`, `PROMPT_STYLE`, `HEADING_STYLE`, `GM_RULE_STYLE`); `roll_style(value)` / `hp_style(hp, max_hp)` — pure tier/threshold helpers, tested in `test_ui.py`
 - `character.py`: `STAT_NAMES` — the six stats (Strength/Dexterity/Constitution/Intelligence/Wisdom/Charisma); `STAT_MIN/STAT_MAX = 1/10` — clean stat scale, no modifiers; `STAT_POOL = 36` — point pool for interactive stat allocation
