@@ -124,12 +124,17 @@ def narration_prompt(spec, scene, action, tier, changes):
         'of the player\'s action in second person, present tense.\n\n'
         f'The scene so far: {scene}\n\n'
         f'The player attempts: {action}\n\n'
+        f'They are trying to {spec["action_kind"]}; narrate the result of that specific '
+        'attempt, not a different action.\n\n'
         f'What happens: {outcomes.outcome_hint(tier, changes)}\n\n'
         'Write two to four sentences of plain prose narrating only this outcome and the '
-        'situation the player now faces. No markdown or special characters. Do not '
-        'mention dice, rolls, numbers, checks, stats, hit points or experience, and do '
-        'not name any game mechanic. Do not write a STATE line or any label, and do not '
-        'decide what the player does next.'
+        'situation the player now faces. Make the prose match the outcome exactly: if it '
+        'is a success, the attempt visibly lands and the player is better off; if it is a '
+        'failure, the attempt clearly fails and it costs them. Vary your sentence '
+        'openings and do not begin with "As you". No markdown or special characters. Do '
+        'not mention dice, rolls, numbers, checks, stats, hit points or experience, and '
+        'do not name any game mechanic. Do not write a STATE line or any label, and do '
+        'not decide what the player does next.'
     )
 
 
@@ -142,9 +147,10 @@ def flavour_prompt(spec, scene, action):
         f'The player does this: {action}\n\n'
         'This action has no uncertain outcome - it is conversation or looking around, '
         'not a risky attempt. Write two to four sentences of plain prose describing what '
-        'the player sees, hears or is told, and the situation they now face. No markdown '
-        'or special characters. Do not mention dice, rolls or any game mechanic, do not '
-        'write a STATE line, and do not decide what the player does next.'
+        'the player sees, hears or is told, and the situation they now face. Vary your '
+        'sentence openings and do not begin with "As you". No markdown or special '
+        'characters. Do not mention dice, rolls or any game mechanic, do not write a '
+        'STATE line, and do not decide what the player does next.'
     )
 
 

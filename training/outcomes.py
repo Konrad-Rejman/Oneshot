@@ -77,7 +77,8 @@ def consequences(roll, stat, stat_value, inventory):
 
 def announce_line(stat, roll):
     '''The canonical check announcement the rules prompt mandates.'''
-    return f'Roll a {stat} check... you roll a {roll}.'
+    article = 'an' if stat[:1].lower() in 'aeiou' else 'a'
+    return f'Roll {article} {stat} check... you roll a {roll}.'
 
 
 def state_line(changes):
@@ -110,9 +111,12 @@ def outcome_hint(tier, changes):
     elif tier == 1:
         hint = 'The attempt does not work, or only half-works at a real cost.'
     elif tier == 2:
-        hint = 'The attempt succeeds, but with a minor complication or limit.'
+        hint = ('The attempt works and the player gets what they were after, '
+                'but a minor complication or limit comes with it.')
     else:
-        hint = 'The attempt succeeds cleanly and well.'
+        hint = ('The attempt clearly succeeds: the player fully overcomes the '
+                'obstacle and ends the moment better off, with no reversal or '
+                'new setback undoing it.')
     if 'hp' in changes:
         hint += ' The player is wounded in the process.'
     if 'lose' in changes:

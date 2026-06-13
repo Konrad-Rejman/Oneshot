@@ -116,6 +116,8 @@ def test_consequences_state_lines_round_trip_across_the_grid():
 
 def test_announce_line_format():
     assert outcomes.announce_line('Wisdom', 13) == 'Roll a Wisdom check... you roll a 13.'
+    # "an" before a vowel-initial stat (Intelligence is the only one).
+    assert outcomes.announce_line('Intelligence', 7) == 'Roll an Intelligence check... you roll a 7.'
 
 
 def test_outcome_hint_carries_no_numbers_but_flags_wound_and_loss():
