@@ -17,8 +17,6 @@ ollama serve
 
 ## Required Setup Before First Run
 
-- A `sessions/` directory in the project root (for saving session transcripts)
-- A `data.csv` file with headers `,Session,User,Tokens,Playtime (s)` (for session analytics)
 - Python 3.12 (required for GPU/torch compatibility)
 - spaCy model: `python -m spacy download en_core_web_md`
 - The BERTScore model (`roberta-large`, ~1.4 GB) downloads automatically on the first summary-scoring call of the first session — not at startup

@@ -38,6 +38,14 @@ def restore_session(data):
     return (data['User'], data['Chat Logs'], data['Context Logs'], data['Tokens'],
             data['Playtime'], data['Memory'], data['Summary'], character, progression)
 
+# First-run setup: create the session-transcript directory and the analytics
+# CSV if absent, so a fresh clone needs no manual file/folder creation.
+def ensure_setup():
+    os.makedirs('sessions', exist_ok=True)
+    if not os.path.exists('data.csv'):
+        # Default index writes the leading empty-named column read back with index_col=0
+        pd.DataFrame(columns=['Session', 'User', 'Tokens', 'Playtime (s)']).to_csv('data.csv')
+
 # Run on exit
 def save():
     # Save session info
@@ -118,6 +126,9 @@ def backup(chatlogs, context_logs, memory, tokens):
     # Save backup data
     backup_data = session_state(chatlogs, context_logs, memory, tokens, summary, character, progression)
     pickle.dump(backup_data, open('backup.pkl', 'wb'))
+
+# Create the session folder and analytics CSV on first run
+ensure_setup()
 
 # Check that ollama is running
 # If not, start ollama as a separate process

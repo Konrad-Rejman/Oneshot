@@ -25,12 +25,7 @@ python -m spacy download en_core_web_md
 
 The first time a session scores a summary update, a ~1.4 GB BERTScore model (`roberta-large`) is downloaded automatically — a one-time wait during play, not a setup step.
 
-### Additional Files / Directories
-
-Before the first run, create the following in the project root:
-
-- A `sessions/` folder — session transcripts are saved here
-- A `data.csv` file with the headers `,Session,User,Tokens,Playtime (s)` — used to record session analytics
+No manual file or folder setup is needed: the `sessions/` transcript folder and the `data.csv` analytics file are created automatically on first run (as are `saves/` and `exports/`).
 
 ## Running
 
