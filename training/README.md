@@ -3,8 +3,8 @@
 Fine-tunes the game's GM model (`mistral:instruct`) on filtered examples of
 its own best behaviour, targeting the failure modes the base model actually
 shows in play: inventing dice values instead of consuming the pre-rolled
-pool, drifting out of the plain-text format, and mangling or dropping the
-machine-read STATE line.
+pool, calling a check on the wrong (or a non-existent) stat, drifting out of
+the plain-text format, and mangling or dropping the machine-read STATE line.
 
 The original model is untouched. The fine-tuned model registers under its
 own Ollama name (`oneshot-gm`); when installed, the game offers a
@@ -17,25 +17,44 @@ base model itself; nothing third-party is copied).
 
 ## How it works
 
-`generate_dataset.py` builds each example in four model stages, all written
-by the local base model from a structural spec (`specs.py` — terse
-parameters like location `sewer`, action `pick the lock`, the turn's roll
-pool, a sampled character sheet and progression state):
+`generate_dataset.py` builds each example from a structural spec (`specs.py`
+— terse parameters like location `sewer`, action `pick the lock`, the turn's
+roll pool, a sampled character sheet and progression state). The base model
+writes the prose; the **turn mechanics are computed by code**, not the model:
 
-1. a three-section story summary,
-2. an opening scene,
-3. a first-person player action,
-4. the GM response — generated from the **exact production prompt** (the
-   same `gm_rules.RULES_TEXT` + character sheet + STATUS block + rolls
-   message, flattened by `model._build_prompt_from_memory`), sampled at
-   several temperatures.
+1. a three-section story summary (model),
+2. an opening scene (model),
+3. a first-person player action (model),
+4. the GM turn, assembled from
+   - a check announcement built deterministically (`outcomes.py`) — the
+     spec's relevant stat and `pool[0]`, e.g. `Roll a Dexterity check... you
+     roll a 14.`;
+   - the GM **narration** (model), answering the **exact production prompt**
+     (`gm_rules.RULES_TEXT` + character sheet + STATUS block + rolls message,
+     flattened by `model._build_prompt_from_memory`) but told only the
+     plain-language outcome to narrate — never the numbers;
+   - the canonical STATE line, computed from the consequence tier
+     (`outcomes.py`, with the CHARACTER stat shift applied): success awards
+     XP, a failed physical check costs HP, a critical failure also loses an
+     item, a caster's spell action spends a slot.
 
-Every stage is gated by `validators.py` (tested in the main suite): strict
-canonical STATE-line grammar, dice announced only from the pool and in
-order, no markdown, no character breaks, second-person narration. The first
-GM candidate to pass all checks is kept; specs whose candidates all fail
-are skipped. The fine-tune then amortises this filtering — the model learns
-to produce first-try what the pipeline accepts.
+   No-check actions (conversation, looking around) skip the announcement and
+   end with `STATE: none`.
+
+**Why the split.** The earlier all-model-authored GM response failed exactly
+where it mattered: the base model named the wrong stat (or a non-stat skill
+like "Perception") about half the time and emitted `STATE: none` on every
+turn — behaviours no amount of best-of-N filtering can surface, because the
+model almost never produces them. Computing the stat, dice and STATE line in
+code guarantees every example demonstrates them, while the model still
+writes all the prose (its actual strength).
+
+Every model stage is gated by `validators.py` (tested in the main suite):
+strict canonical STATE-line grammar, dice announced only from the pool and
+in order, no markdown, no character breaks, second-person narration, and
+`validate_narration` forbidding any dice/mechanics talk in the prose body.
+The assembled response must still pass the full production gate
+(`validate_gm_response`); specs whose stages all fail validation are skipped.
 
 ## Usage
 

@@ -185,6 +185,27 @@ def validate_scene(text, min_chars=100, max_chars=1200):
     return reasons
 
 
+def validate_narration(text, min_chars=80, max_chars=1200):
+    '''
+    Gate for a generated GM narration (the prose body of a check turn, before
+    the deterministic announce/STATE lines are wrapped around it): like a
+    scene but it must never talk about dice or rolls, since the mechanics are
+    added by the pipeline, not the model.
+    '''
+    reasons = (
+        check_length(text, min_chars, max_chars)
+        + check_plain_text(text)
+        + check_no_meta(text)
+        + check_second_person(text)
+        + check_no_state_line(text)
+    )
+    if find_announced_rolls(text):
+        reasons.append('narration announces a roll')
+    if re.search(r'\b(roll|rolls|rolled|rolling|dice)\b', text, re.IGNORECASE):
+        reasons.append('narration mentions dice or rolling')
+    return reasons
+
+
 def validate_action(text, min_chars=10, max_chars=300):
     '''Gate for a generated player action: short first-person prose.'''
     reasons = (

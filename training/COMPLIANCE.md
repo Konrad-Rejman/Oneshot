@@ -18,12 +18,21 @@ place.
 
 1. **Synthetic-only dataset, self-distilled from the base model.**
    The generator (`generate_dataset.py`) has Mistral-7B-Instruct write the
-   story summary, the opening scene, the player action and the GM response
+   story summary, the opening scene, the player action and the GM narration
    for every example. Mistral AI distributes these weights under Apache 2.0,
    which places no restriction on the use of the model's outputs, and the
    outputs are produced on local hardware under no additional terms of
    service. Training Mistral on its own filtered outputs (self-distillation)
    introduces no third-party rights into the chain.
+
+   The only non-model text in a record is mechanical scaffolding the
+   project's own code computes from the spec parameters: the check
+   announcement ("Roll a Strength check... you roll a 14.") and the STATE
+   bookkeeping line ("STATE: HP -3; XP +25"), built deterministically in
+   `outcomes.py`. These are fixed-format game mechanics, not creative prose —
+   the same category as the structural parameters in `specs.py` (point 2) —
+   and fall below the originality threshold for copyright in any event. No
+   assistant-generated text is involved.
 
 2. **No assistant-authored prose in the dataset.**
    The pipeline code was written with Claude Code, but no Claude-generated

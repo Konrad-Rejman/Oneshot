@@ -9,12 +9,16 @@ training and inference formats cannot drift.
 
 All prose is written by the local base model itself (self-distillation;
 see training/COMPLIANCE.md for why): from a structural spec (specs.py) the
-model writes a three-section summary, an opening scene and a player action,
-then answers the assembled production prompt as the GM. Several GM
-candidates are sampled at different temperatures and the first one to pass
-every validator (validators.py) is kept - the fine-tune learns from the
-filtered best of the base model's own behaviour, which is where the quality
-gain comes from.
+model writes a three-section summary, an opening scene, a player action and
+the GM narration. The turn's mechanics are not left to the model - the check
+announcement, the consequence tier (with the CHARACTER stat shift) and the
+canonical STATE line are computed deterministically from the spec in
+outcomes.py, and the model is asked only to narrate the given outcome. This
+guarantees every example demonstrates the right stat, the correct dice and a
+populated, valid STATE line, which the base model rarely produced on its
+own. Each stage is retried at a higher temperature until it passes its
+validator (validators.py); the assembled response must still pass the full
+production gate.
 
 Usage (Ollama running, from the repo root):
 
@@ -39,7 +43,7 @@ import requests  # noqa: E402
 from gm_rules import RULES_TEXT  # noqa: E402
 from model import _build_prompt_from_memory, OLLAMA_API, BASE_MODEL_NAME  # noqa: E402
 from rolls import rolls_message  # noqa: E402
-from training import specs, validators  # noqa: E402
+from training import outcomes, specs, validators  # noqa: E402
 
 DEFAULT_OUT = Path(__file__).resolve().parent / 'data' / 'dataset.jsonl'
 
@@ -102,7 +106,45 @@ def action_prompt(spec, scene):
         'Write your character\'s next action as one or two short sentences in first '
         'person, starting with I. Plain text only, no markdown, no quotation marks, '
         'and do not mention dice or numbers. '
-        f'Your character attempts the following: {spec["action_kind"]}.'
+        f'Make the action clearly an attempt to {spec["action_kind"]}; do not '
+        'substitute a different approach.'
+    )
+
+
+def narration_prompt(spec, scene, action, tier, changes):
+    '''
+    Asks the model for the prose body of a check turn only. The mechanical
+    outcome (which tier, what was lost/gained) is decided in outcomes.py and
+    handed in as plain language, so the model writes prose around a fixed
+    result instead of inventing one - and the announce/STATE lines are added
+    by the pipeline, never the model.
+    '''
+    return (
+        'You are the Game Master of a fantasy pen-and-paper RPG, narrating the result '
+        'of the player\'s action in second person, present tense.\n\n'
+        f'The scene so far: {scene}\n\n'
+        f'The player attempts: {action}\n\n'
+        f'What happens: {outcomes.outcome_hint(tier, changes)}\n\n'
+        'Write two to four sentences of plain prose narrating only this outcome and the '
+        'situation the player now faces. No markdown or special characters. Do not '
+        'mention dice, rolls, numbers, checks, stats, hit points or experience, and do '
+        'not name any game mechanic. Do not write a STATE line or any label, and do not '
+        'decide what the player does next.'
+    )
+
+
+def flavour_prompt(spec, scene, action):
+    '''Prose body of a no-check turn: conversation or description, nothing resolved by chance.'''
+    return (
+        'You are the Game Master of a fantasy pen-and-paper RPG, narrating in second '
+        'person, present tense.\n\n'
+        f'The scene so far: {scene}\n\n'
+        f'The player does this: {action}\n\n'
+        'This action has no uncertain outcome - it is conversation or looking around, '
+        'not a risky attempt. Write two to four sentences of plain prose describing what '
+        'the player sees, hears or is told, and the situation they now face. No markdown '
+        'or special characters. Do not mention dice, rolls or any game mechanic, do not '
+        'write a STATE line, and do not decide what the player does next.'
     )
 
 
@@ -142,10 +184,11 @@ def generate_stage(prompt, validate, model, num_predict, timeout, attempts, reje
     return None
 
 
-def generate_example(spec, model, candidates, timeout, attempts, rejections):
+def generate_example(spec, model, timeout, attempts, rejections):
     '''
-    Run all four stages for one spec. Returns a dataset record dict or
-    None when any stage fails validation on every attempt.
+    Run all stages for one spec (summary, scene, action, then the GM prose
+    body wrapped in deterministic mechanics). Returns a dataset record dict
+    or None when any stage fails validation on every attempt.
     '''
     summary = generate_stage(summary_prompt(spec), validators.validate_summary,
                              model, 300, timeout, attempts, rejections)
@@ -160,31 +203,61 @@ def generate_example(spec, model, candidates, timeout, attempts, rejections):
     if action is None:
         return None
 
-    prompt_text = _build_prompt_from_memory(build_gm_memory(spec, summary, scene, action))
-    for temperature in CANDIDATE_TEMPERATURES[:candidates]:
-        response = call_ollama(prompt_text, model, temperature, 700, timeout)
-        reasons = validators.validate_gm_response(response, spec['rolls'],
-                                                  require_check=spec['requires_check'])
-        if not reasons:
-            return {
-                'prompt': prompt_text,
-                'response': response,
-                'meta': {
-                    'location': spec['location'],
-                    'threat': spec['threat'],
-                    'goal': spec['goal'],
-                    'action_kind': spec['action_kind'],
-                    'stat': spec['stat'],
-                    'requires_check': spec['requires_check'],
-                    'rolls': spec['rolls'],
-                    'character': spec['character'].to_dict(),
-                    'progression': spec['progression'].to_dict(),
-                    'generator_model': model,
-                    'temperature': temperature,
-                },
-            }
+    # The mechanics (check announcement, consequence tier, STATE line) are
+    # built deterministically from the spec; the model writes only the prose
+    # body so it cannot misname the stat, miscount the dice or drop the STATE
+    # line - the failures that dominated the all-model-authored data.
+    roll = spec['rolls'][0]
+    is_caster = spec['character'].char_class in specs.CASTER_CLASSES
+    if spec['requires_check']:
+        stat = spec['stat']
+        stat_value = spec['character'].stats[stat]
+        tier, changes = outcomes.consequences(
+            roll, stat, stat_value, spec['action_kind'], is_caster,
+            spec['progression'].inventory)
+        narration = generate_stage(
+            narration_prompt(spec, scene, action, tier, changes),
+            validators.validate_narration, model, 400, timeout, attempts, rejections)
+        if narration is None:
+            return None
+        state = outcomes.state_line(changes)
+        response = (outcomes.announce_line(stat, roll)
+                    + '\n\n' + narration + '\n\n' + state)
+    else:
+        tier, changes, state = None, {}, 'STATE: none'
+        narration = generate_stage(
+            flavour_prompt(spec, scene, action),
+            validators.validate_narration, model, 400, timeout, attempts, rejections)
+        if narration is None:
+            return None
+        response = narration + '\n\n' + state
+
+    # Safety net: the assembled response must still pass the production gate.
+    reasons = validators.validate_gm_response(response, spec['rolls'],
+                                              require_check=spec['requires_check'])
+    if reasons:
         rejections.update(reasons)
-    return None
+        return None
+
+    prompt_text = _build_prompt_from_memory(build_gm_memory(spec, summary, scene, action))
+    return {
+        'prompt': prompt_text,
+        'response': response,
+        'meta': {
+            'location': spec['location'],
+            'threat': spec['threat'],
+            'goal': spec['goal'],
+            'action_kind': spec['action_kind'],
+            'stat': spec['stat'],
+            'requires_check': spec['requires_check'],
+            'rolls': spec['rolls'],
+            'tier': tier,
+            'state': state,
+            'character': spec['character'].to_dict(),
+            'progression': spec['progression'].to_dict(),
+            'generator_model': model,
+        },
+    }
 
 
 def main(argv=None):
@@ -194,8 +267,6 @@ def main(argv=None):
     parser.add_argument('--out', type=Path, default=DEFAULT_OUT)
     parser.add_argument('--model', default=BASE_MODEL_NAME,
                         help='Ollama model that writes the data (default: the base game model)')
-    parser.add_argument('--candidates', type=int, default=4,
-                        help='GM response candidates tried per example (default 4)')
     parser.add_argument('--stage-attempts', type=int, default=3,
                         help='retries per auxiliary stage (default 3)')
     parser.add_argument('--seed', type=int, default=None)
@@ -215,8 +286,8 @@ def main(argv=None):
     with args.out.open('a', encoding='utf-8') as out:
         while accepted < args.n:
             spec = specs.sample_spec(rng)
-            record = generate_example(spec, args.model, args.candidates,
-                                      args.timeout, args.stage_attempts, rejections)
+            record = generate_example(spec, args.model, args.timeout,
+                                      args.stage_attempts, rejections)
             if record is None:
                 skipped += 1
                 print(f'  skipped a spec ({spec["action_kind"]}) - all candidates failed validation')

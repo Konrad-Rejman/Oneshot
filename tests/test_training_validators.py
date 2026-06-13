@@ -148,6 +148,28 @@ def test_action_requires_first_person_prose():
     assert v.validate_action('I roll a 15 to pick the lock immediately.')
 
 
+def test_narration_accepts_plain_prose_without_mechanics():
+    good = ('You wrench the iron handle and the door grinds open, but the '
+            'hinges shriek loud enough to wake the whole corridor. Somewhere '
+            'ahead, boots begin to move toward you.')
+    assert v.validate_narration(good) == []
+
+
+def test_narration_rejects_dice_talk():
+    # The mechanics are added by the pipeline; narration must not mention them.
+    base = ('You creep along the ledge and reach the far side safely, your '
+            'heart pounding in the dark. ')
+    assert v.validate_narration(base + 'You roll a 14 to keep your balance.')
+    assert v.validate_narration(base + 'The dice favour you this time.')
+
+
+def test_narration_rejects_state_line_and_meta():
+    base = ('You steady your breath and the tremor in your hands fades as the '
+            'ancient hall settles into silence around you once more. ')
+    assert v.validate_narration(base + '\nSTATE: none')
+    assert v.validate_narration('The player should now decide. ' + base)
+
+
 def test_summary_requires_all_sections_in_order():
     good = ('OVERALL STORY: A quest unfolds.\n'
             'CURRENT QUEST: Find the relic.\n'
