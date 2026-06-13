@@ -32,7 +32,6 @@ _STATE_LINE = re.compile(r'^STATE:\s*(.*?)\s*$')
 _STATE_ENTRY_PATTERNS = [
     re.compile(r'^HP [+-]\d+$'),
     re.compile(r'^XP \+\d+$'),
-    re.compile(r'^SLOT [1-9] [+-]\d+$'),
     re.compile(r'^GAIN \S.*$'),
     re.compile(r'^LOSE \S.*$'),
 ]
@@ -85,8 +84,8 @@ def check_dice(text, pool, require_check=True):
 def check_state_line(text):
     '''
     Exactly one STATE line, as the last line, every entry matching the
-    canonical grammar ("HP -3", "XP +25", "GAIN torch", "LOSE rope",
-    "SLOT 1 -1") or the single word "none".
+    canonical grammar ("HP -3", "XP +25", "GAIN torch", "LOSE rope") or the
+    single word "none".
     '''
     lines = [line.strip() for line in text.strip().splitlines() if line.strip()]
     if not lines:

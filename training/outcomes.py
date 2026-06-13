@@ -27,10 +27,6 @@ TIER_NAMES = ['critical failure', 'partial failure',
 # mental and social failures do not wound the character.
 PHYSICAL_STATS = {'Strength', 'Dexterity', 'Constitution'}
 
-# Spell-slot level spent by a spell action (the dataset only exercises
-# level-1 casters, matching specs.sample_progression).
-SPELL_SLOT_LEVEL = '1'
-
 
 def base_tier(roll):
     '''The unshifted consequence tier (0-3) for a raw D20 value.'''
@@ -59,19 +55,16 @@ def effective_tier(roll, stat_value):
     return tier
 
 
-def consequences(roll, stat, stat_value, action_kind, is_caster, inventory):
+def consequences(roll, stat, stat_value, inventory):
     '''
     The mechanical changes a check turn produces, as a tier (0-3) and a
     changes dict keyed by entry kind:
       - success (tier 2-3) awards XP scaled by the roll (10-50);
       - a failed physical check (tier 0-1) costs HP;
-      - a critical failure also loses the first carried item, if any;
-      - a caster's spell action always spends a level-1 slot.
+      - a critical failure also loses the first carried item, if any.
     '''
     tier = effective_tier(roll, stat_value)
     changes = {}
-    if is_caster and 'spell' in action_kind:
-        changes['slot'] = (SPELL_SLOT_LEVEL, -1)
     if tier >= 2:  # success: the challenge is overcome
         changes['xp'] = min(50, 10 + 2 * roll)
     else:  # failure
@@ -90,7 +83,7 @@ def announce_line(stat, roll):
 def state_line(changes):
     '''
     Render a changes dict as the canonical final STATE line, entries in the
-    rules prompt's order (HP; XP; GAIN; LOSE; SLOT). An empty dict is "none".
+    rules prompt's order (HP; XP; GAIN; LOSE). An empty dict is "none".
     The output is built to satisfy validators.check_state_line exactly.
     '''
     parts = []
@@ -102,9 +95,6 @@ def state_line(changes):
         parts.append(f'GAIN {changes["gain"]}')
     if 'lose' in changes:
         parts.append(f'LOSE {changes["lose"]}')
-    if 'slot' in changes:
-        level, delta = changes['slot']
-        parts.append(f'SLOT {level} {delta:+d}')
     return 'STATE: ' + ('; '.join(parts) if parts else 'none')
 
 

@@ -1,3 +1,11 @@
+import os
+
+# On Windows without Developer Mode the huggingface_hub cache cannot use
+# symlinks and falls back to copying; the cache still works, so silence the
+# one-time warning. Must be set before huggingface_hub is first imported
+# (lazily, in _get_bert_scorer).
+os.environ.setdefault('HF_HUB_DISABLE_SYMLINKS_WARNING', '1')
+
 from rouge_score import rouge_scorer
 from sklearn.metrics.pairwise import cosine_similarity
 import spacy

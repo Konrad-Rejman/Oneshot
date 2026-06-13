@@ -6,8 +6,11 @@ as backup.pkl ('User', 'Chat Logs', 'Context Logs', 'Tokens', 'Playtime',
 'Memory', 'Summary', 'Character', 'Progression'), plus 'Version' and 'Name'
 added on write. Version history:
 - 1: the initial key set, no 'Progression'
-- 2: adds the 'Progression' key (ROADMAP 2.3 - HP/spell slots/inventory/XP);
-  version-1 saves load with a fresh progression (main.py:restore_session)
+- 2: adds the 'Progression' key (ROADMAP 2.3 - HP/inventory/XP/level);
+  version-1 saves load with a fresh progression (main.py:restore_session).
+  (Early version-2 saves also carried spell-slot keys inside Progression;
+  those were removed and Progression.from_dict simply ignores any extra
+  keys, so such saves still load.)
 New state belongs in new keys with a SAVE_VERSION bump - never a change to
 the existing keys - so old saves stay loadable.
 '''

@@ -8,7 +8,6 @@ the contract is "sampling many specs never raises".
 import random
 
 from character import STAT_NAMES
-from progression import SPELL_SLOT_LEVELS
 from training import specs
 
 
@@ -21,15 +20,13 @@ def test_many_sampled_specs_are_valid_game_state():
         assert spec['stat'] is None or spec['stat'] in STAT_NAMES
         progression = spec['progression']
         assert 1 <= progression.hp <= progression.max_hp
-        assert set(progression.spell_slots) <= set(SPELL_SLOT_LEVELS)
 
 
-def test_spell_actions_only_sampled_for_casters():
+def test_no_spell_actions_are_sampled():
     rng = random.Random(11)
     for _ in range(300):
         spec = specs.sample_spec(rng)
-        if 'spell' in spec['action_kind']:
-            assert spec['character'].char_class in specs.CASTER_CLASSES
+        assert 'spell' not in spec['action_kind']
 
 
 def test_relevant_stat_covers_both_tier_shift_bands():

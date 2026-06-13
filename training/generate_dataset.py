@@ -208,13 +208,11 @@ def generate_example(spec, model, timeout, attempts, rejections):
     # body so it cannot misname the stat, miscount the dice or drop the STATE
     # line - the failures that dominated the all-model-authored data.
     roll = spec['rolls'][0]
-    is_caster = spec['character'].char_class in specs.CASTER_CLASSES
     if spec['requires_check']:
         stat = spec['stat']
         stat_value = spec['character'].stats[stat]
         tier, changes = outcomes.consequences(
-            roll, stat, stat_value, spec['action_kind'], is_caster,
-            spec['progression'].inventory)
+            roll, stat, stat_value, spec['progression'].inventory)
         narration = generate_stage(
             narration_prompt(spec, scene, action, tier, changes),
             validators.validate_narration, model, 400, timeout, attempts, rejections)

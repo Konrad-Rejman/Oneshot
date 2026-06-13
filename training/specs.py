@@ -64,7 +64,6 @@ ACTIONS = [
     ('resist the effect', 'Constitution', True),
     ('decipher the inscription', 'Intelligence', True),
     ('recall what is known about it', 'Intelligence', True),
-    ('cast a spell at the problem', 'Intelligence', True),
     ('search the area for clues', 'Wisdom', True),
     ('listen carefully at the door', 'Wisdom', True),
     ('track where it went', 'Wisdom', True),
@@ -79,13 +78,12 @@ ACTIONS = [
 ITEMS = [
     'torch', 'rope', 'dagger', 'healing potion', 'shield', 'lockpicks',
     'map', 'lantern', 'rations', 'short sword', 'bow', 'cloak',
-    'grappling hook', 'spellbook', 'flask of oil', 'coin pouch', 'bedroll',
+    'grappling hook', 'tinderbox', 'flask of oil', 'coin pouch', 'bedroll',
     'crowbar', 'smoke bomb', 'silver ring',
 ]
 
 RACES = ['human', 'elf', 'dwarf', 'halfling', 'half-orc', 'gnome']
 CLASSES = ['fighter', 'rogue', 'wizard', 'cleric', 'ranger', 'bard']
-CASTER_CLASSES = {'wizard', 'cleric', 'bard'}
 OCCUPATIONS = [
     'soldier', 'farmhand', 'scribe', 'sailor', 'poacher', 'acolyte',
     'street urchin', 'merchant', 'blacksmith', 'hunter',
@@ -138,7 +136,7 @@ def sample_progression(rng, character):
     A random but internally consistent progression: max HP follows the
     game's formula for the sampled level, HP is weighted towards full but
     covers the wounded and near-death bands (so low-HP narration and death
-    turns appear in the data), casters get level-1 slots with some spent.
+    turns appear in the data).
     '''
     level = rng.choice([1, 1, 1, 2, 2, 3, 4, 5])
     max_hp = starting_max_hp(character.stats['Constitution']) + HP_PER_LEVEL * (level - 1)
@@ -149,16 +147,10 @@ def sample_progression(rng, character):
         hp = rng.randint(max(1, max_hp // 3), max_hp)
     else:
         hp = rng.randint(1, max(1, max_hp // 3))  # near death
-    slots, slots_max = {}, {}
-    if character.char_class in CASTER_CLASSES:
-        total = rng.randint(2, 3)
-        slots_max['1'] = total
-        slots['1'] = rng.randint(0, total)
     xp = (level - 1) * 100 + rng.randint(0, 99)
     inventory = rng.sample(ITEMS, rng.randint(0, 5))
     features = rng.sample(FEATURES, max(0, level - 1))
     return Progression(max_hp=max_hp, hp=hp, level=level, xp=xp,
-                       spell_slots=slots, spell_slots_max=slots_max,
                        inventory=inventory, features=features)
 
 
@@ -166,10 +158,6 @@ def sample_spec(rng):
     '''One training example's full parameter set.'''
     kind, stat, requires_check = rng.choice(ACTIONS)
     character = sample_character(rng, relevant_stat=stat)
-    # A spell action from a non-caster would contradict the STATUS block the
-    # prompt swears by; reroute it to a mundane action instead.
-    if 'spell' in kind and character.char_class not in CASTER_CLASSES:
-        kind, stat, requires_check = ACTIONS[0]
     return {
         'location': rng.choice(LOCATIONS),
         'threat': rng.choice(THREATS),

@@ -57,7 +57,7 @@ def test_dice_more_announcements_than_pool_rejected():
 # --- check_state_line: strict canonical grammar ---
 
 def test_state_line_canonical_entries_accepted():
-    text = 'You win.\nSTATE: HP -3; XP +25; GAIN torch; LOSE rope; SLOT 1 -1'
+    text = 'You win.\nSTATE: HP -3; XP +25; GAIN torch; LOSE rope'
     assert v.check_state_line(text) == []
 
 
@@ -85,7 +85,7 @@ def test_state_line_markdown_decoration_rejected():
 def test_state_line_malformed_entries_rejected():
     assert v.check_state_line('You win.\nSTATE: HP minus three')
     assert v.check_state_line('You win.\nSTATE: XP -10')  # XP only goes up
-    assert v.check_state_line('You win.\nSTATE: SLOT 0 -1')
+    assert v.check_state_line('You win.\nSTATE: SLOT 1 -1')  # spell slots removed
 
 
 # --- plain text / meta / person / length ---

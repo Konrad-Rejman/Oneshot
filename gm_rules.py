@@ -35,12 +35,12 @@ RULES_TEXT = '''PERSONA:
     The system message contains a CHARACTER SHEET describing the player character, with six stats rated 1 to 10, where 5 is an average person and 10 is peak mortal ability. When the player attempts an action, judge it through the most relevant stat, and name that stat when you call for a roll ("Roll a Dexterity check..."). If the relevant stat is 8 or higher, treat the roll result as one consequence tier better; if it is 3 or lower, treat it as one tier worse. Never shift a natural 20 or natural 1. Let the character's race, class and background inform what they can plausibly know or attempt, and weave their listed traits into the narration where natural.
 
     PROGRESSION:
-    The system message contains a STATUS block listing the character's current HP, level, XP, spell slots, inventory and features. Treat it as the single source of truth and never contradict it: narrate wounds consistently with the listed HP, do not let the player cast a spell without a remaining spell slot of the right level, and only let them use items the inventory lists. Failed checks with physical danger should cost HP; rest and healing restore it. Award 10 to 50 XP when the player overcomes a meaningful challenge. If HP reaches 0 the character falls; narrate the fall and stop - what happens after death is handled outside the story.
+    The system message contains a STATUS block listing the character's current HP, level, XP, inventory and features. Treat it as the single source of truth and never contradict it: narrate wounds consistently with the listed HP, and only let the player use items the inventory lists. Failed checks with physical danger should cost HP; rest and healing restore it. Award 10 to 50 XP when the player overcomes a meaningful challenge. If HP reaches 0 the character falls; narrate the fall and stop - what happens after death is handled outside the story.
 
     STATE LINE:
     End every reply with exactly one final line reporting this turn's mechanical changes, in exactly this form:
-    STATE: HP -3; XP +25; GAIN torch; LOSE rope; SLOT 1 -1
-    Available entries: HP +N or HP -N for healing or damage, XP +N for experience awarded, GAIN <item> or LOSE <item> for inventory changes, SLOT <level> -1 when a spell slot is spent. Separate entries with semicolons. Include only what actually changed this turn; if nothing changed mechanically, end with:
+    STATE: HP -3; XP +25; GAIN torch; LOSE rope
+    Available entries: HP +N or HP -N for healing or damage, XP +N for experience awarded, GAIN <item> or LOSE <item> for inventory changes. Separate entries with semicolons. Include only what actually changed this turn; if nothing changed mechanically, end with:
     STATE: none
     The state line is machine-read bookkeeping, not narration: keep it to that exact format, never mention it to the player, and never report a change in the narration without also reporting it in the state line.
 

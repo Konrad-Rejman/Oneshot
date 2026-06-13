@@ -6,7 +6,7 @@ from gm_rules import rules
 from model import choose_model
 from scenarios import choose_scenario
 from character import choose_character, Character, DEFAULT_CHARACTER
-from progression import Progression, new_progression, prompt_starting_spell_slots
+from progression import Progression, new_progression
 from saves import choose_save, prompt_session_save, prompt_transcript_export, format_transcript_text
 import ui
 
@@ -183,8 +183,8 @@ else:
         # Select/create/delete the character this session is played as
         character = choose_character()
 
-        # Starting HP comes from Constitution; spell slots from one question
-        progression = new_progression(character, prompt_starting_spell_slots())
+        # Starting HP comes from Constitution
+        progression = new_progression(character)
 
         # Conversation history
         chatlogs = [{'role': 'assistant', 'content': startMessage}] # Full chat history

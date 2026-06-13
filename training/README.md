@@ -35,8 +35,8 @@ writes the prose; the **turn mechanics are computed by code**, not the model:
      plain-language outcome to narrate — never the numbers;
    - the canonical STATE line, computed from the consequence tier
      (`outcomes.py`, with the CHARACTER stat shift applied): success awards
-     XP, a failed physical check costs HP, a critical failure also loses an
-     item, a caster's spell action spends a slot.
+     XP, a failed physical check costs HP, and a critical failure also loses
+     an item.
 
    No-check actions (conversation, looking around) skip the announcement and
    end with `STATE: none`.

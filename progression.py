@@ -1,6 +1,5 @@
 '''
-Character progression: HP, spell slots, inventory, XP, levels, and death
-(ROADMAP 2.3).
+Character progression: HP, inventory, XP, levels, and death (ROADMAP 2.3).
 
 The GM model reports each turn's mechanical changes in a machine-read STATE
 line at the end of its reply ("STATE: HP -3; XP +25; GAIN torch").
@@ -33,18 +32,12 @@ HP_PER_LEVEL = 2      # max HP gained per level
 # resurrection can never take a level away.
 RESURRECTION_XP_PENALTY = 50
 
-# Valid spell-slot levels. String keys so the dicts round-trip through the
-# JSON save slots unchanged.
-SPELL_SLOT_LEVELS = [str(n) for n in range(1, 10)]
-
 @dataclass
 class Progression:
     max_hp: int
     hp: int
     level: int = 1
     xp: int = 0
-    spell_slots: dict = field(default_factory=dict)      # {slot level: remaining}
-    spell_slots_max: dict = field(default_factory=dict)  # {slot level: total}
     inventory: list = field(default_factory=list)
     features: list = field(default_factory=list)
 
@@ -61,18 +54,6 @@ class Progression:
             raise ValueError(f'level must be between 1 and {MAX_LEVEL}, got {self.level}')
         if self.xp < 0:
             raise ValueError(f'xp must not be negative, got {self.xp}')
-        if set(self.spell_slots) != set(self.spell_slots_max):
-            raise ValueError('spell_slots and spell_slots_max must list the same slot levels')
-        for slot_level, maximum in self.spell_slots_max.items():
-            if slot_level not in SPELL_SLOT_LEVELS:
-                raise ValueError(f'Unknown spell-slot level: {slot_level!r}')
-            remaining = self.spell_slots[slot_level]
-            for value in (maximum, remaining):
-                if not isinstance(value, int) or isinstance(value, bool):
-                    raise ValueError(f'Spell-slot counts must be integers, got {value!r}')
-            if maximum < 0 or not (0 <= remaining <= maximum):
-                raise ValueError(f'Level-{slot_level} slots must satisfy 0 <= remaining <= maximum, '
-                                 f'got {remaining}/{maximum}')
         for entry in list(self.inventory) + list(self.features):
             if not isinstance(entry, str) or not entry.strip():
                 raise ValueError(f'Inventory and feature entries must be non-empty strings, got {entry!r}')
@@ -83,8 +64,6 @@ class Progression:
             'hp': self.hp,
             'level': self.level,
             'xp': self.xp,
-            'spell_slots': dict(self.spell_slots),
-            'spell_slots_max': dict(self.spell_slots_max),
             'inventory': list(self.inventory),
             'features': list(self.features),
         }
@@ -96,8 +75,6 @@ class Progression:
             hp=data['hp'],
             level=data['level'],
             xp=data['xp'],
-            spell_slots=dict(data['spell_slots']),
-            spell_slots_max=dict(data['spell_slots_max']),
             inventory=list(data['inventory']),
             features=list(data['features']),
         )
@@ -106,19 +83,12 @@ class Progression:
         '''
         Render the current state as a plain-text STATUS block appended to the
         system prompt each turn (like the character sheet), so the model can
-        reference HP, slots and items accurately.
+        reference HP and items accurately.
         '''
         if self.level >= MAX_LEVEL:
             xp_text = f'XP: {self.xp} (maximum level reached)'
         else:
             xp_text = f'XP: {self.xp} (level {self.level + 1} at {xp_for_level(self.level + 1)})'
-        if self.spell_slots_max:
-            slots_text = '; '.join(
-                f'level {slot_level}: {self.spell_slots[slot_level]}/{self.spell_slots_max[slot_level]} remaining'
-                for slot_level in sorted(self.spell_slots_max, key=int)
-            )
-        else:
-            slots_text = 'none (not a spellcaster)'
         inventory_text = ', '.join(self.inventory) if self.inventory else 'nothing'
         features_text = ', '.join(self.features) if self.features else 'none'
         return (
@@ -126,7 +96,6 @@ class Progression:
             f'HP: {self.hp}/{self.max_hp}\n'
             f'Level: {self.level}\n'
             f'{xp_text}\n'
-            f'Spell slots: {slots_text}\n'
             f'Inventory: {inventory_text}\n'
             f'Features: {features_text}'
         )
@@ -134,14 +103,13 @@ class Progression:
 def starting_max_hp(constitution):
     return STARTING_HP_BASE + constitution
 
-def new_progression(character, level_1_slots=0):
+def new_progression(character):
     '''
     Fresh level-1 progression for the given Character: max HP from
-    Constitution, optional starting level-1 spell slots, empty inventory.
+    Constitution, empty inventory.
     '''
     hp = starting_max_hp(character.stats['Constitution'])
-    slots = {'1': level_1_slots} if level_1_slots > 0 else {}
-    return Progression(max_hp=hp, hp=hp, spell_slots=dict(slots), spell_slots_max=dict(slots))
+    return Progression(max_hp=hp, hp=hp)
 
 def xp_for_level(level):
     '''Total XP at which the given level is reached.'''
@@ -157,14 +125,13 @@ def pending_level_ups(progression):
 
 def level_up(progression):
     '''
-    Advance one level: +HP_PER_LEVEL max HP, fully healed, spell slots
-    restored. The class-feature choice is applied separately (increase_stat /
-    grant_feature / grant_spell_slot). Mutates in place.
+    Advance one level: +HP_PER_LEVEL max HP, fully healed. The class-feature
+    choice is applied separately (increase_stat / grant_feature). Mutates in
+    place.
     '''
     progression.level += 1
     progression.max_hp += HP_PER_LEVEL
     progression.hp = progression.max_hp
-    progression.spell_slots = dict(progression.spell_slots_max)
 
 def increase_stat(character, stat):
     '''
@@ -182,18 +149,6 @@ def grant_feature(progression, feature):
     in the STATUS block.
     '''
     progression.features.append(feature)
-
-def grant_spell_slot(progression, slot_level):
-    '''
-    Level-up choice: one more maximum (and current) spell slot of the
-    given level ('1'-'9'). Returns False for an invalid slot level.
-    '''
-    slot_level = str(slot_level)
-    if slot_level not in SPELL_SLOT_LEVELS:
-        return False
-    progression.spell_slots_max[slot_level] = progression.spell_slots_max.get(slot_level, 0) + 1
-    progression.spell_slots[slot_level] = progression.spell_slots.get(slot_level, 0) + 1
-    return True
 
 def is_dead(progression):
     return progression.hp <= 0
@@ -220,7 +175,6 @@ _STATE_LINE_PATTERN = re.compile(
 _STATE_ENTRY_PATTERNS = [
     ('hp', re.compile(r'^HP\s*:?\s*([+-]?\d+)$', re.IGNORECASE)),
     ('xp', re.compile(r'^XP\s*:?\s*([+-]?\d+)$', re.IGNORECASE)),
-    ('slot', re.compile(r'^SLOTS?\s*:?\s*(\d)\s*:?\s*([+-]?\d+)$', re.IGNORECASE)),
     ('gain', re.compile(r'^GAINS?\s*:?\s+(.+)$', re.IGNORECASE)),
     ('lose', re.compile(r'^LOSES?\s*:?\s+(.+)$', re.IGNORECASE)),
 ]
@@ -230,7 +184,7 @@ def parse_state_changes(response):
     Find the GM's STATE line(s) in a response. Returns (clean_text, changes):
     the response with every STATE line stripped, and the last line's parsed
     entries as a list of tuples - ('hp', delta), ('xp', delta),
-    ('gain', item), ('lose', item), ('slot', slot_level, delta).
+    ('gain', item), ('lose', item).
     "none", blank, and unparseable entries are skipped; a response with no
     STATE line at all returns it unchanged with no changes.
     '''
@@ -252,8 +206,6 @@ def parse_state_changes(response):
                 continue
             if kind in ('hp', 'xp'):
                 changes.append((kind, int(match.group(1))))
-            elif kind == 'slot':
-                changes.append((kind, match.group(1), int(match.group(2))))
             else:
                 changes.append((kind, match.group(1).strip()))
             break
@@ -263,8 +215,7 @@ def apply_state_changes(progression, changes):
     '''
     Apply parsed STATE-line changes to the progression, clamping to valid
     ranges: HP to [0, max_hp], XP no lower than the current level's floor
-    (so the model can never de-level the character), spell slots to
-    [0, maximum] and only for slot levels the character actually has.
+    (so the model can never de-level the character).
     Losing an item not held, like every other invalid entry, is ignored.
     Mutates in place; the caller checks for level-ups and death afterwards.
     '''
@@ -282,48 +233,19 @@ def apply_state_changes(progression, changes):
                 if held.lower() == wanted:
                     progression.inventory.remove(held)
                     break
-        elif kind == 'slot':
-            slot_level, delta = change[1], change[2]
-            if slot_level in progression.spell_slots_max:
-                maximum = progression.spell_slots_max[slot_level]
-                progression.spell_slots[slot_level] = max(
-                    0, min(maximum, progression.spell_slots[slot_level] + delta))
-
-def prompt_starting_spell_slots():
-    '''
-    New-game question: how many level-1 spell slots the character starts
-    with (0 or blank for a non-caster). Returns the count.
-    '''
-    ui.system('\nSpell slots are your budget for casting spells: each spell cast spends one slot of '
-              'the matching level, and the GM will not let you cast once you have none left. '
-              'They refill when you level up, and you can gain more as level-up rewards.')
-    ui.system('If your character casts spells, choose how many level-1 slots they start with (2 is typical); '
-              'if not, enter 0 - you can still become a caster later.')
-    while True:
-        raw = ui.ask('Starting level-1 spell slots (0 or blank for a non-caster):').strip()
-        if not raw:
-            return 0
-        try:
-            value = int(raw)
-        except ValueError:
-            ui.warn('Please enter a whole number.')
-            continue
-        if 0 <= value <= 9:
-            return value
-        ui.warn('Please enter a number between 0 and 9.')
 
 def prompt_level_up(progression, character):
     '''
     Interactive level-up flow: applies every pending level one at a time,
-    each with a class-feature choice (stat increase, named feature, or a
-    new spell slot). Mutates progression and character in place.
+    each with a class-feature choice (stat increase or a named feature).
+    Mutates progression and character in place.
     '''
     while pending_level_ups(progression) > 0:
         level_up(progression)
         ui.event(f'\nLevel up! You are now level {progression.level}: '
-                 f'max HP is {progression.max_hp}, you are fully healed and your spell slots are restored.')
+                 f'max HP is {progression.max_hp} and you are fully healed.')
         ui.menu('Choose your class feature for this level:',
-                ['Increase a stat by 1', 'Learn a new class feature', 'Gain a spell slot'])
+                ['Increase a stat by 1', 'Learn a new class feature'])
         while True:
             choice = ui.ask().strip()
             if choice == '1':
@@ -343,14 +265,7 @@ def prompt_level_up(progression, character):
                     break
                 ui.warn('The feature needs a name.')
                 continue
-            if choice == '3':
-                slot_level = ui.ask('Spell slot level (1-9):').strip()
-                if grant_spell_slot(progression, slot_level):
-                    ui.system(f'You now have {progression.spell_slots_max[slot_level]} level-{slot_level} spell slot(s).')
-                    break
-                ui.warn('Please enter a slot level from 1 to 9.')
-                continue
-            ui.warn('Please enter 1, 2, or 3.')
+            ui.warn('Please enter 1 or 2.')
 
 def prompt_death(progression):
     '''

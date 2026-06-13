@@ -19,7 +19,6 @@ from progression import (
     Progression,
     apply_state_changes,
     grant_feature,
-    grant_spell_slot,
     increase_stat,
     is_dead,
     level_for_xp,
@@ -34,8 +33,7 @@ from progression import (
 
 
 def make_progression(**overrides):
-    fields = dict(max_hp=10, hp=10, level=1, xp=0,
-                  spell_slots={}, spell_slots_max={}, inventory=[], features=[])
+    fields = dict(max_hp=10, hp=10, level=1, xp=0, inventory=[], features=[])
     fields.update(overrides)
     return Progression(**fields)
 
@@ -48,8 +46,7 @@ def make_character(**stat_overrides):
 
 class TestProgressionValidation:
     def test_valid_constructs(self):
-        p = make_progression(spell_slots={'1': 2}, spell_slots_max={'1': 3},
-                             inventory=['rope'], features=['Second Wind'])
+        p = make_progression(inventory=['rope'], features=['Second Wind'])
         assert p.hp == 10
 
     def test_hp_out_of_range_raises(self):
@@ -75,18 +72,6 @@ class TestProgressionValidation:
         with pytest.raises(ValueError):
             make_progression(xp=-1)
 
-    def test_slot_dicts_must_share_levels(self):
-        with pytest.raises(ValueError):
-            make_progression(spell_slots={'1': 1}, spell_slots_max={})
-
-    def test_slot_remaining_above_maximum_raises(self):
-        with pytest.raises(ValueError):
-            make_progression(spell_slots={'1': 4}, spell_slots_max={'1': 3})
-
-    def test_unknown_slot_level_raises(self):
-        with pytest.raises(ValueError):
-            make_progression(spell_slots={'0': 1}, spell_slots_max={'0': 1})
-
     def test_empty_inventory_entry_raises(self):
         with pytest.raises(ValueError):
             make_progression(inventory=[''])
@@ -95,15 +80,22 @@ class TestProgressionValidation:
 class TestDictRoundTrip:
     def test_round_trip_preserves_fields(self):
         p = make_progression(hp=7, level=3, xp=230,
-                             spell_slots={'1': 1, '2': 0}, spell_slots_max={'1': 3, '2': 1},
                              inventory=['rope', 'torch'], features=['Second Wind'])
         assert Progression.from_dict(p.to_dict()) == p
 
     def test_dict_is_json_safe(self):
         # Save slots are JSON; the dict must survive a JSON round-trip
-        # unchanged (string slot keys, plain lists).
-        p = make_progression(spell_slots={'1': 2}, spell_slots_max={'1': 2})
+        # unchanged (plain lists, ints).
+        p = make_progression(inventory=['rope'], features=['Second Wind'])
         assert json.loads(json.dumps(p.to_dict())) == p.to_dict()
+
+    def test_from_dict_ignores_legacy_keys(self):
+        # Early version-2 saves carried spell-slot keys inside Progression;
+        # from_dict must still load them by ignoring the extras.
+        data = make_progression(hp=7).to_dict()
+        data['spell_slots'] = {'1': 2}
+        data['spell_slots_max'] = {'1': 3}
+        assert Progression.from_dict(data) == make_progression(hp=7)
 
     def test_to_dict_copies_containers(self):
         # Mutating the exported dict must not reach back into the Progression.
@@ -119,14 +111,9 @@ class TestNewProgression:
         assert p.hp == p.max_hp
         assert p.level == 1 and p.xp == 0
 
-    def test_non_caster_has_no_slots(self):
+    def test_starts_with_empty_inventory_and_features(self):
         p = new_progression(make_character())
-        assert p.spell_slots_max == {}
-
-    def test_caster_starts_with_level_1_slots(self):
-        p = new_progression(make_character(), level_1_slots=2)
-        assert p.spell_slots == {'1': 2}
-        assert p.spell_slots_max == {'1': 2}
+        assert p.inventory == [] and p.features == []
 
 
 class TestXpCurve:
@@ -148,13 +135,11 @@ class TestXpCurve:
 
 class TestLevelUp:
     def test_level_up_heals_and_raises_max_hp(self):
-        p = make_progression(hp=3, spell_slots={'1': 0}, spell_slots_max={'1': 2})
+        p = make_progression(hp=3)
         level_up(p)
         assert p.level == 2
         assert p.max_hp == 10 + HP_PER_LEVEL
         assert p.hp == p.max_hp
-        # Spell slots are restored to full on level-up.
-        assert p.spell_slots == {'1': 2}
 
     def test_increase_stat_caps_at_max(self):
         c = make_character(Strength=STAT_MAX)
@@ -168,15 +153,6 @@ class TestLevelUp:
         p = make_progression()
         grant_feature(p, 'Second Wind')
         assert p.features == ['Second Wind']
-
-    def test_grant_spell_slot(self):
-        p = make_progression(spell_slots={'1': 1}, spell_slots_max={'1': 2})
-        assert grant_spell_slot(p, '1')
-        assert p.spell_slots_max['1'] == 3 and p.spell_slots['1'] == 2
-        # Granting a level the character had no slots of creates it.
-        assert grant_spell_slot(p, 2)
-        assert p.spell_slots_max['2'] == 1 and p.spell_slots['2'] == 1
-        assert not grant_spell_slot(p, '0')
 
 
 class TestDeathAndResurrection:
@@ -211,10 +187,10 @@ class TestParseStateChanges:
 
     def test_state_line_stripped_and_parsed(self):
         clean, changes = parse_state_changes(
-            'The goblin slashes you.\n\nSTATE: HP -3; XP +25; GAIN torch; LOSE rope; SLOT 1 -1')
+            'The goblin slashes you.\n\nSTATE: HP -3; XP +25; GAIN torch; LOSE rope')
         assert clean == 'The goblin slashes you.'
         assert changes == [('hp', -3), ('xp', 25), ('gain', 'torch'),
-                           ('lose', 'rope'), ('slot', '1', -1)]
+                           ('lose', 'rope')]
 
     def test_none_state_line(self):
         clean, changes = parse_state_changes('You look around.\n\nSTATE: none')
@@ -276,28 +252,16 @@ class TestApplyStateChanges:
         apply_state_changes(p, [('lose', 'rope'), ('lose', 'shield')])
         assert p.inventory == ['torch']
 
-    def test_slots_clamped_and_unknown_levels_ignored(self):
-        p = make_progression(spell_slots={'1': 1}, spell_slots_max={'1': 2})
-        apply_state_changes(p, [('slot', '1', -5)])
-        assert p.spell_slots['1'] == 0
-        apply_state_changes(p, [('slot', '1', 5)])
-        assert p.spell_slots['1'] == 2
-        # Spending a slot the character does not have changes nothing.
-        apply_state_changes(p, [('slot', '3', -1)])
-        assert '3' not in p.spell_slots
-
 
 class TestToPrompt:
     def test_contains_all_state(self):
         p = make_progression(hp=7, level=2, xp=130,
-                             spell_slots={'1': 2}, spell_slots_max={'1': 3},
                              inventory=['rope'], features=['Second Wind'])
         prompt = p.to_prompt()
         assert 'STATUS' in prompt
         assert 'HP: 7/10' in prompt
         assert 'Level: 2' in prompt
         assert f'XP: 130 (level 3 at {xp_for_level(3)})' in prompt
-        assert 'level 1: 2/3 remaining' in prompt
         assert 'rope' in prompt
         assert 'Second Wind' in prompt
 
@@ -305,6 +269,5 @@ class TestToPrompt:
         p = make_progression(level=MAX_LEVEL, xp=xp_for_level(MAX_LEVEL))
         prompt = p.to_prompt()
         assert 'maximum level' in prompt
-        assert 'not a spellcaster' in prompt
         assert 'Inventory: nothing' in prompt
         assert 'Features: none' in prompt

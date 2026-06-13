@@ -40,7 +40,7 @@ QUEST_RESOLUTION_KEYWORDS = [
 STATUS_CHANGE_KEYWORDS = [
     'hit point', 'hp', 'health', 'damage', 'wound', 'injur', 'heal', 'bleed',
     'unconscious', 'exhaust', 'fatigue', 'poison', 'level up', 'leveled up',
-    'experience point', 'xp', 'spell slot', 'inventory', 'equip', 'pick up',
+    'experience point', 'xp', 'inventory', 'equip', 'pick up',
     'picked up', 'you gain', 'you lose', 'potion', 'weapon', 'armor', 'armour',
     'gold piece',
 ]
@@ -101,7 +101,7 @@ def _affected_sections(action, response, state_changed):
     '''
     Summary sections this turn's exchange affects: the keyword
     classification, plus PLAYER STATUS whenever the GM's STATE line reported
-    a mechanical change (HP/XP/items/slots) - those belong in the status
+    a mechanical change (HP/XP/items) - those belong in the status
     section even when the narration dodges the keyword lists.
     '''
     affected = _classify_exchange(action, response)
@@ -199,7 +199,7 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
         # rolls) so trims can never drop it; tokens are accounted for in the
         # post-summary budget below.
         character_text = '\n\n' + character.to_prompt() if character else ''
-        # Current HP/level/slots/inventory (ROADMAP 2.3), surfaced the same
+        # Current HP/level/XP/inventory (ROADMAP 2.3), surfaced the same
         # way as the character sheet so the model references them accurately.
         progression_text = '\n\n' + progression.to_prompt() if progression else ''
         # The bare rules content, restored after the model call strips the

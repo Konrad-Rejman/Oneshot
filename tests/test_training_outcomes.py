@@ -49,8 +49,8 @@ def test_effective_tier_clamps_at_both_ends():
 # --- consequences ---
 
 def test_success_awards_xp_in_band_and_scales_with_roll():
-    _, low = outcomes.consequences(11, 'Strength', 5, 'fight it', False, [])
-    _, high = outcomes.consequences(20, 'Strength', 5, 'fight it', False, [])
+    _, low = outcomes.consequences(11, 'Strength', 5, [])
+    _, high = outcomes.consequences(20, 'Strength', 5, [])
     assert 10 <= low['xp'] <= 50 and 10 <= high['xp'] <= 50
     assert high['xp'] == 50
     assert high['xp'] > low['xp']
@@ -58,36 +58,22 @@ def test_success_awards_xp_in_band_and_scales_with_roll():
 
 
 def test_physical_failure_costs_hp_mental_does_not():
-    _, phys = outcomes.consequences(3, 'Strength', 5, 'fight it', False, [])
+    _, phys = outcomes.consequences(3, 'Strength', 5, [])
     assert phys['hp'] == -3  # critical failure
-    _, partial = outcomes.consequences(8, 'Dexterity', 5, 'dodge', False, [])
+    _, partial = outcomes.consequences(8, 'Dexterity', 5, [])
     assert partial['hp'] == -2  # partial failure
-    _, mental = outcomes.consequences(3, 'Charisma', 5, 'persuade', False, [])
+    _, mental = outcomes.consequences(3, 'Charisma', 5, [])
     assert 'hp' not in mental
 
 
 def test_critical_failure_loses_first_item_only_when_carrying():
-    _, with_items = outcomes.consequences(2, 'Strength', 5, 'fight it', False,
-                                          ['torch', 'rope'])
+    _, with_items = outcomes.consequences(2, 'Strength', 5, ['torch', 'rope'])
     assert with_items['lose'] == 'torch'
-    _, empty = outcomes.consequences(2, 'Strength', 5, 'fight it', False, [])
+    _, empty = outcomes.consequences(2, 'Strength', 5, [])
     assert 'lose' not in empty
     # A partial (not critical) failure keeps the inventory.
-    _, partial = outcomes.consequences(8, 'Strength', 5, 'fight it', False, ['torch'])
+    _, partial = outcomes.consequences(8, 'Strength', 5, ['torch'])
     assert 'lose' not in partial
-
-
-def test_caster_spell_action_always_spends_a_slot():
-    _, win = outcomes.consequences(18, 'Intelligence', 5,
-                                   'cast a spell at the problem', True, [])
-    _, lose = outcomes.consequences(3, 'Intelligence', 5,
-                                    'cast a spell at the problem', True, [])
-    assert win['slot'] == ('1', -1) and lose['slot'] == ('1', -1)
-    # No slot when the action is not a spell or the caster flag is off.
-    _, mundane = outcomes.consequences(18, 'Strength', 5, 'fight it', True, [])
-    _, noncaster = outcomes.consequences(18, 'Intelligence', 5,
-                                         'cast a spell at the problem', False, [])
-    assert 'slot' not in mundane and 'slot' not in noncaster
 
 
 # --- state_line: must satisfy the strict dataset validator ---
@@ -98,8 +84,8 @@ def test_state_line_empty_is_none():
 
 def test_state_line_orders_entries_canonically():
     line = outcomes.state_line({'hp': -3, 'xp': 25, 'gain': 'torch',
-                                'lose': 'rope', 'slot': ('1', -1)})
-    assert line == 'STATE: HP -3; XP +25; GAIN torch; LOSE rope; SLOT 1 -1'
+                                'lose': 'rope'})
+    assert line == 'STATE: HP -3; XP +25; GAIN torch; LOSE rope'
 
 
 def test_every_emitted_state_line_passes_the_validator():
@@ -108,7 +94,7 @@ def test_every_emitted_state_line_passes_the_validator():
         {'xp': 50},
         {'hp': -2},
         {'hp': -3, 'lose': 'lantern'},
-        {'slot': ('1', -1), 'xp': 30},
+        {'xp': 30, 'gain': 'map'},
     ]
     for changes in cases:
         line = outcomes.state_line(changes)
@@ -121,12 +107,9 @@ def test_consequences_state_lines_round_trip_across_the_grid():
     for roll in range(1, 21):
         for stat_value in (2, 5, 9, None):
             for stat in ('Strength', 'Charisma'):
-                for caster in (False, True):
-                    _, changes = outcomes.consequences(
-                        roll, stat, stat_value, 'cast a spell at the problem',
-                        caster, ['torch'])
-                    line = outcomes.state_line(changes)
-                    assert validators.check_state_line(f'x\n{line}') == []
+                _, changes = outcomes.consequences(roll, stat, stat_value, ['torch'])
+                line = outcomes.state_line(changes)
+                assert validators.check_state_line(f'x\n{line}') == []
 
 
 # --- announce_line / outcome_hint ---
