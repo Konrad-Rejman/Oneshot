@@ -63,12 +63,15 @@ place.
    dataset or of a model fine-tuned on it.
 
 6. **Distribution.**
-   The fine-tuned weights are **not published**; the public repository
-   carries only the pipeline code and this documentation, so anyone can
-   reproduce the dataset and model themselves. If the weights are ever
-   distributed, Apache 2.0 requires shipping the `NOTICE` file in this
-   directory (crediting Mistral AI) alongside them; the dataset itself
-   would need no further attribution.
+   The fine-tuned weights are **published to the Ollama registry**
+   (`gm-istral-v01`) under the Apache 2.0 licence — the same licence as the
+   Mistral base. Apache 2.0 permits redistribution of derivative works; the
+   one obligation it imposes (section 4) is satisfied by shipping the
+   attribution/`NOTICE` with the weights, which the `LICENSE` block in
+   `training/Modelfile` embeds into the published model. The dataset itself
+   needs no further attribution (it is synthetic, see points 1-2). The
+   public repository continues to carry the pipeline code so the dataset and
+   model remain reproducible.
 
 ## If the dataset composition ever changes
 

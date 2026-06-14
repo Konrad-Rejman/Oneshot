@@ -36,8 +36,8 @@ def test_missing_keys_default_without_raising():
 # --- model toggle (ROADMAP 3) ---
 
 def test_is_installed_untagged_name_matches_any_tag():
-    assert is_installed('gm-istral', ['mistral:instruct', 'gm-istral:latest'])
-    assert is_installed('gm-istral', ['gm-istral'])
+    assert is_installed('gm-istral-v01', ['mistral:instruct', 'gm-istral-v01:latest'])
+    assert is_installed('gm-istral-v01', ['gm-istral-v01'])
 
 
 def test_is_installed_tagged_name_requires_exact_match():
@@ -46,8 +46,8 @@ def test_is_installed_tagged_name_requires_exact_match():
 
 
 def test_is_installed_absent_model_and_empty_list():
-    assert not is_installed('gm-istral', ['mistral:instruct'])
-    assert not is_installed('gm-istral', [])
+    assert not is_installed('gm-istral-v01', ['mistral:instruct'])
+    assert not is_installed('gm-istral-v01', [])
 
 
 def test_set_active_model_switches_and_restores():

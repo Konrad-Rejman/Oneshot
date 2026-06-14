@@ -1,9 +1,9 @@
 # Registers the fine-tuned GM model with the local Ollama (ROADMAP 3):
 #
-#   ollama create gm-istral -f training/Modelfile
+#   ollama create gm-istral-v01 -f training/Modelfile
 #
 # Run from the directory containing the GGUF downloaded from the training
-# run (train_qlora.py), or adjust the FROM path. The model name "gm-istral"
+# run (train_qlora.py), or adjust the FROM path. The model name "gm-istral-v01"
 # is what the game's startup toggle looks for (model.py:FINETUNED_MODEL_NAME).
 #
 # The template matches what `ollama show --modelfile mistral:instruct`
@@ -15,3 +15,14 @@ TEMPLATE """[INST] {{ if .System }}{{ .System }} {{ end }}{{ .Prompt }} [/INST]"
 
 PARAMETER stop "[INST]"
 PARAMETER stop "[/INST]"
+
+LICENSE """
+This model is a QLoRA fine-tune of Mistral-7B-Instruct-v0.3, Copyright Mistral
+AI, licensed under the Apache License, Version 2.0. The fine-tuned weights are
+distributed under the same Apache 2.0 license.
+
+NOTICE (Apache License 2.0, section 4(d)): Derivative of Mistral-7B-Instruct-v0.3
+(Copyright Mistral AI, Apache-2.0, https://www.apache.org/licenses/LICENSE-2.0).
+The training data was generated locally by Mistral-7B-Instruct-v0.3; it contains
+no third-party datasets or copyrighted text.
+"""

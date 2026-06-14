@@ -14,7 +14,7 @@ Unsloth needs Linux); it is written for a free Kaggle GPU notebook:
   5. After training (roughly 1-2 hours for 300 examples x 3 epochs on a T4)
      download gm-istral.Q4_K_M.gguf from the output pane.
   6. Locally, next to the downloaded file:
-       ollama create gm-istral -f training/Modelfile
+       ollama create gm-istral-v01 -f training/Modelfile
      The game's startup menu then offers the fine-tuned model (model.py).
 
 Base model: unsloth's 4-bit quantisation of Mistral-7B-Instruct-v0.3 (Apache
@@ -174,7 +174,7 @@ def main():
         os.chdir(prev_cwd)
         shutil.rmtree(GGUF_BUILD_DIR, ignore_errors=True)
     print(f'Download gm-istral.Q4_K_M.gguf from {OUTPUT_GGUF_DIR}/ and run '
-          '"ollama create gm-istral -f training/Modelfile" locally.')
+          '"ollama create gm-istral-v01 -f training/Modelfile" locally.')
 
 
 if __name__ == '__main__':

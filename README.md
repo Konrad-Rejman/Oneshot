@@ -49,7 +49,7 @@ If the program crashes unexpectedly, a `backup.pkl` file is saved with the full 
 
 The `training/` directory contains a pipeline for fine-tuning the GM model so it more reliably calls a check on the right stat, consumes the pre-rolled dice in order, and keeps its end-of-turn state-tracking line correct. The training data is fully synthetic and generated locally — the base model writes the prose while the dice, stat checks and state-tracking line are computed in code from each example's setup — so the public repository carries no third-party datasets (see `training/COMPLIANCE.md` for the licensing rationale, and `training/README.md` for how to generate the data and run the training on a free cloud GPU).
 
-The base model is never replaced: if you build the fine-tuned model and register it with Ollama as `gm-istral`, the game offers a choice between the two at startup (defaulting to the base model) and shows the active model in the status panel. Without it installed, nothing changes.
+The base model is never replaced: if you build the fine-tuned model and register it with Ollama as `gm-istral-v01`, the game offers a choice between the two at startup (defaulting to the base model) and shows the active model in the status panel. Without it installed, nothing changes.
 
 ## Testing
 
