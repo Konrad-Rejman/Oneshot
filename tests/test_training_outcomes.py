@@ -76,6 +76,15 @@ def test_critical_failure_loses_first_item_only_when_carrying():
     assert 'lose' not in partial
 
 
+def test_item_loss_is_restricted_to_physical_failures():
+    # A social/mental critical failure must not lose an item: the loss is
+    # only emitted for physical checks so it always has a bodily cause.
+    _, social = outcomes.consequences(2, 'Charisma', 5, ['torch', 'rope'])
+    assert 'lose' not in social and 'hp' not in social
+    _, mental = outcomes.consequences(2, 'Intelligence', 5, ['torch'])
+    assert 'lose' not in mental
+
+
 # --- state_line: must satisfy the strict dataset validator ---
 
 def test_state_line_empty_is_none():

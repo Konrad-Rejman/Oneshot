@@ -61,15 +61,17 @@ def consequences(roll, stat, stat_value, inventory):
     changes dict keyed by entry kind:
       - success (tier 2-3) awards XP scaled by the roll (10-50);
       - a failed physical check (tier 0-1) costs HP;
-      - a critical failure also loses the first carried item, if any.
+      - a critical physical failure also loses the first carried item, if
+        any (item loss is restricted to physical failures so the lost item
+        always has a bodily cause - dropped, snatched, broken in a fall -
+        rather than vanishing from a social or mental misstep).
     '''
     tier = effective_tier(roll, stat_value)
     changes = {}
     if tier >= 2:  # success: the challenge is overcome
         changes['xp'] = min(50, 10 + 2 * roll)
-    else:  # failure
-        if stat in PHYSICAL_STATS:
-            changes['hp'] = -3 if tier == 0 else -2
+    elif stat in PHYSICAL_STATS:  # physical failure: bodily cost
+        changes['hp'] = -3 if tier == 0 else -2
         if tier == 0 and inventory:
             changes['lose'] = inventory[0]
     return tier, changes
