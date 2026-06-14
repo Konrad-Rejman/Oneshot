@@ -93,8 +93,8 @@ def test_status_bar_shows_name_hp_level_xp_and_tokens():
 def test_status_bar_shows_model_when_given_and_omits_when_not():
     progression = Progression(max_hp=12, hp=12, level=1, xp=0)
     with ui.console.capture() as capture:
-        ui.status_bar(_character(), progression, 0, 'oneshot-gm')
-    assert 'oneshot-gm' in capture.get()
+        ui.status_bar(_character(), progression, 0, 'gm-istral')
+    assert 'gm-istral' in capture.get()
     with ui.console.capture() as capture:
         ui.status_bar(_character(), progression, 0)
     assert 'Model' not in capture.get()

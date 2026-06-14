@@ -12,9 +12,9 @@ Unsloth needs Linux); it is written for a free Kaggle GPU notebook:
   4. In the first cell:  %pip install unsloth
      In the second cell: %run train_qlora.py   (upload this file too)
   5. After training (roughly 1-2 hours for 300 examples x 3 epochs on a T4)
-     download oneshot-gm.Q4_K_M.gguf from the output pane.
+     download gm-istral.Q4_K_M.gguf from the output pane.
   6. Locally, next to the downloaded file:
-       ollama create oneshot-gm -f training/Modelfile
+       ollama create gm-istral -f training/Modelfile
      The game's startup menu then offers the fine-tuned model (model.py).
 
 Base model: unsloth's 4-bit quantisation of Mistral-7B-Instruct-v0.3 (Apache
@@ -31,8 +31,13 @@ model learns to write GM replies, not to reproduce prompts.
 '''
 
 BASE_MODEL = 'unsloth/mistral-7b-instruct-v0.3-bnb-4bit'
-DATASET_PATH = 'dataset.jsonl'       # adjust to /kaggle/input/<dataset>/dataset.jsonl
-OUTPUT_GGUF_DIR = 'oneshot-gm'       # produces oneshot-gm/*.Q4_K_M.gguf
+DATASET_PATH = '/kaggle/input/datasets/konradrejman/mistral-gm-json/dataset.jsonl'
+OUTPUT_GGUF_DIR = 'gm-istral' # final Q4_K_M GGUF lands here (download it)
+ADAPTER_DIR = 'gm-istral-lora'       # LoRA adapter saved here before the export
+GGUF_BUILD_DIR = '/tmp/gm-istral-build'  # scratch for the f16 intermediate, off
+                                     # the capped /kaggle/working volume (/tmp is
+                                     # on the larger root overlay; /kaggle/temp
+                                     # does not exist on all Kaggle images)
 MAX_SEQ_LENGTH = 2048
 LORA_R = 16
 LORA_ALPHA = 32
@@ -46,8 +51,7 @@ def main():
     import json
 
     from datasets import Dataset
-    from transformers import TrainingArguments
-    from trl import SFTTrainer
+    from trl import SFTConfig, SFTTrainer
     from unsloth import FastLanguageModel
     from unsloth.chat_templates import train_on_responses_only
 
@@ -79,25 +83,34 @@ def main():
 
     dataset = Dataset.from_list([to_text(r) for r in records])
 
+    # Current TRL (transformers 5.x) moved the SFT-specific knobs out of the
+    # SFTTrainer constructor into SFTConfig and renamed the tokenizer kwarg to
+    # processing_class. The sequence-length cap was also renamed across
+    # versions (max_seq_length -> max_length); set whichever the installed
+    # SFTConfig exposes so a too-small default can never truncate a response.
+    sft_args = SFTConfig(
+        per_device_train_batch_size=2,
+        gradient_accumulation_steps=4,
+        num_train_epochs=EPOCHS,
+        learning_rate=LEARNING_RATE,
+        lr_scheduler_type='linear',
+        warmup_steps=10,
+        logging_steps=5,
+        optim='adamw_8bit',
+        seed=3407,
+        output_dir='outputs',
+        report_to='none',
+        dataset_text_field='text',
+    )
+    for length_attr in ('max_length', 'max_seq_length'):
+        if hasattr(sft_args, length_attr):
+            setattr(sft_args, length_attr, MAX_SEQ_LENGTH)
+
     trainer = SFTTrainer(
         model=model,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
         train_dataset=dataset,
-        dataset_text_field='text',
-        max_seq_length=MAX_SEQ_LENGTH,
-        args=TrainingArguments(
-            per_device_train_batch_size=2,
-            gradient_accumulation_steps=4,
-            num_train_epochs=EPOCHS,
-            learning_rate=LEARNING_RATE,
-            lr_scheduler_type='linear',
-            warmup_steps=10,
-            logging_steps=5,
-            optim='adamw_8bit',
-            seed=3407,
-            output_dir='outputs',
-            report_to='none',
-        ),
+        args=sft_args,
     )
     # Mask loss to everything after [/INST]: the model is graded only on the
     # GM reply, never on reproducing the prompt.
@@ -108,11 +121,60 @@ def main():
     print(f"Training done: {stats.metrics.get('train_loss', '?')} final loss. "
           'Sanity-check that loss decreased before exporting.')
 
-    # Merge the adapter and export a Q4_K_M GGUF for Ollama in one step.
-    model.save_pretrained_gguf(OUTPUT_GGUF_DIR, tokenizer,
-                               quantization_method='q4_k_m')
-    print(f'GGUF written under {OUTPUT_GGUF_DIR}/ - download it and run '
-          '"ollama create oneshot-gm -f training/Modelfile" locally.')
+    import os
+    import shutil
+
+    # Save the LoRA adapter first - it is tiny (~100-200 MB) and is the
+    # trained result. If the disk-heavy GGUF export below fails (e.g. a capped
+    # output volume), this survives so the conversion can be redone without
+    # retraining: reload BASE_MODEL, model.load_adapter(ADAPTER_DIR), then
+    # save_pretrained_gguf.
+    model.save_pretrained(ADAPTER_DIR)
+    tokenizer.save_pretrained(ADAPTER_DIR)
+    print(f'LoRA adapter saved under {ADAPTER_DIR}/')
+
+    # Reclaim space before the GGUF export. Merging the adapter writes a full
+    # f16 copy of the 7B (~14.5 GB) and the converter writes another, so the
+    # training checkpoints have to go or a capped volume (Kaggle's /kaggle/
+    # working is ~19.5 GB) runs out mid-write.
+    shutil.rmtree('outputs', ignore_errors=True)
+
+    # The GGUF export needs ~28 GB of transient space at once: the merged f16
+    # safetensors model AND the f16 GGUF intermediate. The converter writes
+    # the latter with a path relative to the *current working directory*, so
+    # pointing only the output dir at scratch is not enough - the whole export
+    # must run with cwd inside the roomy scratch volume (Unsloth's own error
+    # advises "save to /tmp"). chdir there, build with a relative dir name so
+    # both transients land in scratch, then copy only the final Q4_K_M
+    # (~4.4 GB) back to OUTPUT_GGUF_DIR on the capped output volume.
+    output_dir = os.path.abspath(OUTPUT_GGUF_DIR)
+    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(GGUF_BUILD_DIR, exist_ok=True)
+    prev_cwd = os.getcwd()
+    os.chdir(GGUF_BUILD_DIR)
+    try:
+        model.save_pretrained_gguf('gguf_out', tokenizer,
+                                   quantization_method='q4_k_m')
+        # Unsloth writes to "<dir>_gguf/" and names the file after the base
+        # model, so search the whole scratch tree (cwd) rather than a guessed
+        # path, and copy out (before the finally clears scratch) under the
+        # name the Modelfile's FROM line expects.
+        copied = False
+        for root, _dirs, files in os.walk('.'):
+            for name in files:
+                if name.lower().endswith('.gguf') and 'q4_k_m' in name.lower():
+                    dst = os.path.join(output_dir, 'gm-istral.Q4_K_M.gguf')
+                    shutil.copy(os.path.join(root, name), dst)
+                    print(f'Q4_K_M GGUF copied to {dst}')
+                    copied = True
+        if not copied:
+            raise RuntimeError('No Q4_K_M .gguf found under the build dir - '
+                               'nothing was copied out.')
+    finally:
+        os.chdir(prev_cwd)
+        shutil.rmtree(GGUF_BUILD_DIR, ignore_errors=True)
+    print(f'Download gm-istral.Q4_K_M.gguf from {OUTPUT_GGUF_DIR}/ and run '
+          '"ollama create gm-istral -f training/Modelfile" locally.')
 
 
 if __name__ == '__main__':

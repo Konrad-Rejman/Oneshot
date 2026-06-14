@@ -6,11 +6,11 @@ OLLAMA_API = "http://localhost:11434/api/generate"
 OLLAMA_TAGS_API = "http://localhost:11434/api/tags"
 
 # Model toggle (ROADMAP 3): the base model is always available; the
-# fine-tuned model (training/, registered with `ollama create oneshot-gm`)
+# fine-tuned model (training/, registered with `ollama create gm-istral`)
 # is offered at startup when installed. MODEL_NAME is the active model used
 # by generate_response - switch it only through set_active_model.
 BASE_MODEL_NAME = "mistral:instruct"
-FINETUNED_MODEL_NAME = "oneshot-gm"
+FINETUNED_MODEL_NAME = "gm-istral"
 MODEL_NAME = BASE_MODEL_NAME
 
 def set_active_model(name):
@@ -35,7 +35,7 @@ def installed_models():
 def is_installed(name, installed):
     '''
     True if name matches an installed model exactly, or matches one ignoring
-    its tag: "oneshot-gm" matches "oneshot-gm:latest". A name that carries
+    its tag: "gm-istral" matches "gm-istral:latest". A name that carries
     its own tag ("mistral:instruct") must match exactly.
     '''
     if ':' in name:

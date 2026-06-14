@@ -98,7 +98,7 @@ How it works: from each spec (location/threat/goal nouns, action kind + stat, sa
 
 As planned — QLoRA via **Unsloth**, base `unsloth/mistral-7b-instruct-v0.3-bnb-4bit` (Apache 2.0, the same weights `mistral:instruct` serves), `lora_r=16`, `lora_alpha=32`, `load_in_4bit=True`, `max_seq_length=2048`, `learning_rate=2e-4` — packaged as `training/train_qlora.py` for a free Kaggle T4 notebook (step-by-step in the file header; the dev machine's 6 GB GPU can't train a 7B). Loss is masked to response tokens, and the GGUF (Q4_K_M) is exported directly by Unsloth, replacing 3.4's separate merge/convert steps. A private execution guide for the paid options (`training/private/`, gitignored) covers RunPod/Vast.ai/Lambda and managed APIs.
 
-**Model toggle (pulled forward from 3.4):** the fine-tuned model registers as `oneshot-gm` (`training/Modelfile`) alongside the untouched base model. `model.py` holds both names (`BASE_MODEL_NAME`/`FINETUNED_MODEL_NAME`); at startup `choose_model()` offers the toggle only when the fine-tuned model is installed in Ollama (default: base), and the status bar names the active model so evaluation sessions are identifiable. The fine-tuned weights are not published.
+**Model toggle (pulled forward from 3.4):** the fine-tuned model registers as `gm-istral` (`training/Modelfile`) alongside the untouched base model. `model.py` holds both names (`BASE_MODEL_NAME`/`FINETUNED_MODEL_NAME`); at startup `choose_model()` offers the toggle only when the fine-tuned model is installed in Ollama (default: base), and the status bar names the active model so evaluation sessions are identifiable. The fine-tuned weights are not published.
 
 ### 3.3 Hardware Plan
 
@@ -124,7 +124,7 @@ Validate using Free options, then run the full job on paid cloud.
 Simpler than originally planned: Unsloth exports a merged Q4_K_M GGUF directly (`model.save_pretrained_gguf` at the end of `train_qlora.py`), replacing the separate merge/convert/quantise steps. Registration:
 
 ```bash
-ollama create oneshot-gm -f training/Modelfile
+ollama create gm-istral -f training/Modelfile
 ```
 
 The Modelfile's template mirrors `mistral:instruct`'s, so the fine-tuned model sees prompts in exactly the training shape. `MODEL_NAME` is **not** repointed: the base model stays the default and `choose_model()` toggles per session (see 3.2).

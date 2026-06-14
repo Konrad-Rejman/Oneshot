@@ -7,7 +7,7 @@ pool, calling a check on the wrong (or a non-existent) stat, drifting out of
 the plain-text format, and mangling or dropping the machine-read STATE line.
 
 The original model is untouched. The fine-tuned model registers under its
-own Ollama name (`oneshot-gm`); when installed, the game offers a
+own Ollama name (`gm-istral`); when installed, the game offers a
 base/fine-tuned toggle at startup (`model.py:choose_model`) and shows the
 active model in the status bar, so the two can be compared side by side.
 
@@ -64,10 +64,10 @@ The assembled response must still pass the full production gate
 python -m training.generate_dataset --n 300
 
 # 2. Train on Kaggle's free T4 (30 GPU-hours/week) - see the step-by-step
-#    header of train_qlora.py. Output: oneshot-gm.Q4_K_M.gguf
+#    header of train_qlora.py. Output: gm-istral.Q4_K_M.gguf
 
 # 3. Register with Ollama (next to the downloaded GGUF):
-ollama create oneshot-gm -f training/Modelfile
+ollama create gm-istral -f training/Modelfile
 
 # 4. Play. The startup menu now offers base vs fine-tuned.
 python main.py
