@@ -6,10 +6,13 @@ shows in play: inventing dice values instead of consuming the pre-rolled
 pool, calling a check on the wrong (or a non-existent) stat, drifting out of
 the plain-text format, and mangling or dropping the machine-read STATE line.
 
-The original model is untouched. The fine-tuned model registers under its
-own Ollama name (`gm-istral-v01`); when installed, the game offers a
-base/fine-tuned toggle at startup (`model.py:choose_model`) and shows the
-active model in the status bar, so the two can be compared side by side.
+The original model is untouched. The fine-tuned model is published on the
+Ollama registry as `Konrad-Rejman/gm-istral-v01` (`ollama pull
+Konrad-Rejman/gm-istral-v01`); when installed under that name, the game
+offers a base/fine-tuned toggle at startup (`model.py:choose_model`) and
+shows the active model in the status bar, so the two can be compared side by
+side. The toggle keys off `model.py:FINETUNED_MODEL_NAME`, so a locally built
+copy must be registered under the same name to be detected.
 
 See `COMPLIANCE.md` for the UK copyright/data-law rationale behind the
 dataset design (short version: every sentence is generated locally by the
@@ -66,8 +69,10 @@ python -m training.generate_dataset --n 300
 # 2. Train on Kaggle's free T4 (30 GPU-hours/week) - see the step-by-step
 #    header of train_qlora.py. Output: gm-istral.Q4_K_M.gguf
 
-# 3. Register with Ollama (next to the downloaded GGUF):
-ollama create gm-istral-v01 -f training/Modelfile
+# 3. Register with Ollama (next to the downloaded GGUF). Use the same name
+#    the game detects (model.py:FINETUNED_MODEL_NAME), or just `ollama pull
+#    Konrad-Rejman/gm-istral-v01` to get the published build:
+ollama create Konrad-Rejman/gm-istral-v01 -f training/Modelfile
 
 # 4. Play. The startup menu now offers base vs fine-tuned.
 python main.py

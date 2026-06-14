@@ -64,7 +64,7 @@ place.
 
 6. **Distribution.**
    The fine-tuned weights are **published to the Ollama registry**
-   (`gm-istral-v01`) under the Apache 2.0 licence — the same licence as the
+   (`Konrad-Rejman/gm-istral-v01`) under the Apache 2.0 licence — the same licence as the
    Mistral base. Apache 2.0 permits redistribution of derivative works; the
    one obligation it imposes (section 4) is satisfied by shipping the
    attribution/`NOTICE` with the weights, which the `LICENSE` block in

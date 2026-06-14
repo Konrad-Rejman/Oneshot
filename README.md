@@ -8,11 +8,14 @@ A terminal RPG where a local LLM acts as your Game Master. You describe your cha
 
 **Python 3.12** (required for compatibility with GPU processing)
 
-**Ollama**, with the Mistral Instruct model pulled:
+**Ollama**, with at least one of the two GM models pulled — the base model, the fine-tuned model, or both:
 
 ```bash
-ollama pull mistral:instruct
+ollama pull mistral:instruct              # base GM (default)
+ollama pull Konrad-Rejman/gm-istral-v01   # fine-tuned GM (optional)
 ```
+
+The base `mistral:instruct` is the default Game Master, so it's all you need to play. The fine-tuned `Konrad-Rejman/gm-istral-v01` is optional (see [Fine-Tuned GM Model](#fine-tuned-gm-model-optional) below) — with both installed you're offered a choice at startup; with only the fine-tuned model installed, pick it from that startup menu.
 
 You don't need to start the server yourself — on launch the program checks whether Ollama is already running and starts it for you if not (falling back to asking you to run `ollama serve` manually if that fails).
 
@@ -49,7 +52,7 @@ If the program crashes unexpectedly, a `backup.pkl` file is saved with the full 
 
 The `training/` directory contains a pipeline for fine-tuning the GM model so it more reliably calls a check on the right stat, consumes the pre-rolled dice in order, and keeps its end-of-turn state-tracking line correct. The training data is fully synthetic and generated locally — the base model writes the prose while the dice, stat checks and state-tracking line are computed in code from each example's setup — so the public repository carries no third-party datasets (see `training/COMPLIANCE.md` for the licensing rationale, and `training/README.md` for how to generate the data and run the training on a free cloud GPU).
 
-The base model is never replaced: if you build the fine-tuned model and register it with Ollama as `gm-istral-v01`, the game offers a choice between the two at startup (defaulting to the base model) and shows the active model in the status panel. Without it installed, nothing changes.
+The base model is never replaced. The fine-tuned model is published on the Ollama registry as `Konrad-Rejman/gm-istral-v01` — pull it with `ollama pull Konrad-Rejman/gm-istral-v01` (or build your own from `training/` and register it under that name). When it is installed, the game offers a choice between the two at startup (defaulting to the base model) and shows the active model in the status panel. Without it installed, nothing changes.
 
 ## Testing
 

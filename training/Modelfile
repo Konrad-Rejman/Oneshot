@@ -1,10 +1,12 @@
 # Registers the fine-tuned GM model with the local Ollama (ROADMAP 3):
 #
-#   ollama create gm-istral-v01 -f training/Modelfile
+#   ollama create Konrad-Rejman/gm-istral-v01 -f training/Modelfile
 #
 # Run from the directory containing the GGUF downloaded from the training
-# run (train_qlora.py), or adjust the FROM path. The model name "gm-istral-v01"
-# is what the game's startup toggle looks for (model.py:FINETUNED_MODEL_NAME).
+# run (train_qlora.py), or adjust the FROM path. The name
+# "Konrad-Rejman/gm-istral-v01" matches the published registry build and is
+# what the game's startup toggle looks for (model.py:FINETUNED_MODEL_NAME);
+# `ollama pull Konrad-Rejman/gm-istral-v01` fetches that build directly.
 #
 # The template matches what `ollama show --modelfile mistral:instruct`
 # wraps prompts in, so the fine-tuned model sees requests in exactly the

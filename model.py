@@ -6,11 +6,12 @@ OLLAMA_API = "http://localhost:11434/api/generate"
 OLLAMA_TAGS_API = "http://localhost:11434/api/tags"
 
 # Model toggle (ROADMAP 3): the base model is always available; the
-# fine-tuned model (training/, registered with `ollama create gm-istral-v01`)
-# is offered at startup when installed. MODEL_NAME is the active model used
-# by generate_response - switch it only through set_active_model.
+# fine-tuned model (training/, published on the Ollama registry as
+# Konrad-Rejman/gm-istral-v01) is offered at startup when installed - pull it
+# with `ollama pull Konrad-Rejman/gm-istral-v01`. MODEL_NAME is the active
+# model used by generate_response - switch it only through set_active_model.
 BASE_MODEL_NAME = "mistral:instruct"
-FINETUNED_MODEL_NAME = "gm-istral-v01"
+FINETUNED_MODEL_NAME = "Konrad-Rejman/gm-istral-v01"
 MODEL_NAME = BASE_MODEL_NAME
 
 def set_active_model(name):
