@@ -9,6 +9,7 @@ from context import (
     QUEST_RESOLUTION_KEYWORDS,
     SECTION_HEADERS,
     STATUS_CHANGE_KEYWORDS,
+    STORY_BEAT_KEYWORDS,
     SUMMARY_UPDATE_INTERVAL,
     _affected_sections,
     _apply_forced_update,
@@ -130,6 +131,12 @@ class TestContainsKeyword:
         # Documents the deliberate recall-over-precision choice.
         assert _contains_keyword('you feel healthy', ['heal'])
 
+    def test_money_keyword_avoids_coincidence(self):
+        # 'coins' (not bare 'coin') is used so a narrative 'coincidence' never
+        # masquerades as a money/status change under the prefix match.
+        assert _contains_keyword('you pocket twenty coins', ['coins'])
+        assert not _contains_keyword('what a strange coincidence', ['coins'])
+
 
 class TestApplyForcedUpdate:
     # Staleness guard: a full refresh is forced once SUMMARY_UPDATE_INTERVAL
@@ -171,10 +178,34 @@ class TestClassifyExchange:
                                       'The corridor stretches into darkness.')
         assert affected == set()
 
+    def test_combat_victory_resolves_quest(self):
+        affected = _classify_exchange('I strike the dragon',
+                                      'You slay the beast; victory is yours.')
+        assert affected == {'CURRENT QUEST', 'OVERALL STORY'}
+
+    def test_condition_change_touches_player_status(self):
+        affected = _classify_exchange('I cross the swamp',
+                                      'A creeping numbness spreads — you are paralyzed.')
+        assert affected == {'PLAYER STATUS'}
+
+    def test_acquisition_touches_player_status(self):
+        affected = _classify_exchange('I search the body',
+                                      'You pocket a handful of coins.')
+        assert affected == {'PLAYER STATUS'}
+
+    def test_story_beat_touches_overall_story_only(self):
+        # A major narrative beat that is neither a quest resolution nor a
+        # player-status change refreshes OVERALL STORY on its own.
+        affected = _classify_exchange(
+            'I ask about the throne',
+            'The old king has died, and your nemesis seizes power.')
+        assert affected == {'OVERALL STORY'}
+
     def test_keyword_lists_are_lowercase(self):
         # _classify_exchange lowercases the text, so keywords must be
         # lowercase to ever match.
-        for keyword in QUEST_RESOLUTION_KEYWORDS + STATUS_CHANGE_KEYWORDS:
+        for keyword in (QUEST_RESOLUTION_KEYWORDS + STORY_BEAT_KEYWORDS
+                        + STATUS_CHANGE_KEYWORDS):
             assert keyword == keyword.lower()
 
 

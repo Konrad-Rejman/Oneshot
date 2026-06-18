@@ -30,19 +30,53 @@ _SECTION_PATTERN = re.compile(
 # moves the wider narrative forward.
 QUEST_RESOLUTION_KEYWORDS = [
     'quest complete', 'quest is complete', 'quest finished', 'quest failed',
-    'objective complete', 'objective achieved', 'mission accomplished',
-    'mission complete', 'mission failed', 'you have completed', "you've completed",
+    'quest accomplished', 'quest is over', 'quest concluded',
+    'objective complete', 'objective is complete', 'objective achieved',
+    'objective failed', 'mission accomplished', 'mission complete',
+    'mission failed', 'task complete', 'task is complete', 'task accomplished',
+    'task failed', 'goal achieved', 'goal accomplished',
+    'you have completed', "you've completed", 'you complete the',
+    'you completed the', 'you have fulfilled', 'you fulfill',
+    'you failed the quest', 'you failed the mission',
     'puzzle solved', 'mystery solved', 'you found the', 'you rescue', 'you rescued',
-    'you defeat', 'you defeated', 'you have defeated',
+    'you save the', 'you saved the', 'you claim the', 'you claimed the',
+    'you defeat', 'you defeated', 'you have defeated', 'you slay', 'you slew',
+    'you have slain', 'you vanquish', 'you vanquished', 'you triumph', 'victory',
+    'you have won', 'curse is lifted', 'curse is broken', 'the day is saved',
+]
+
+# Phrases marking a major narrative beat that moves the overall story without
+# being a quest resolution or a player-status change: revelations, NPC deaths,
+# betrayals, new allies, and world/faction events. Touches OVERALL STORY only.
+# Curated for precision - location/arrival words are omitted because they fire
+# on routine movement rather than story-shifting events.
+STORY_BEAT_KEYWORDS = [
+    'you learn that', 'you discover', 'is revealed', 'reveals that',
+    'the truth about', 'the secret of', 'prophecy', 'prophet',
+    'betray', 'alliance', 'an ally', 'new ally', 'nemesis', 'rival',
+    'join you', 'joins you', 'joins your', 'join your party',
+    'is dead', 'has died', 'lies dead', 'is slain', 'murder', 'assassinat',
+    'declare war', 'declares war', 'war breaks out', 'invasion', 'invade',
+    'rebellion', 'uprising', 'plague', 'famine', 'kingdom falls',
+    'the city falls', 'crowned', 'coronation', 'time passes', 'years pass',
 ]
 
 # Phrases suggesting the player's status (HP, inventory, level, etc.) changed.
+# Favours narrative condition and acquisition words over generic item nouns,
+# since a STATE line already forces a PLAYER STATUS refresh on mechanical change.
 STATUS_CHANGE_KEYWORDS = [
     'hit point', 'hp', 'health', 'damage', 'wound', 'injur', 'heal', 'bleed',
-    'unconscious', 'exhaust', 'fatigue', 'poison', 'level up', 'leveled up',
-    'experience point', 'xp', 'inventory', 'equip', 'pick up',
-    'picked up', 'you gain', 'you lose', 'potion', 'weapon', 'armor', 'armour',
-    'gold piece',
+    'unconscious', 'exhaust', 'fatigue', 'poison', 'paralyz', 'paralys',
+    'stunned', 'blinded', 'cursed', 'disease', 'infect', 'starv', 'hungr',
+    'thirst', 'cured', 'revive', 'resurrect', 'you collapse', 'you die',
+    'you perish', 'level up', 'leveled up', 'levels up', 'gain a level',
+    'gained a level', 'experience point', 'xp', 'gain experience',
+    'gains experience', 'inventory', 'equip', 'pick up', 'picked up',
+    'you gain', 'you lose', 'you acquire', 'you obtain', 'you are given',
+    'hands you', 'you steal', 'you stole', 'you pocket', 'you discard',
+    'you drop the', 'you buy', 'you bought', 'you sell', 'you sold',
+    'you purchase', 'you barter', 'loot', 'treasure', 'potion', 'weapon',
+    'armor', 'armour', 'gold piece', 'gold coin', 'silver coin', 'coins',
 ]
 
 def _estimate_tokens(messages):
@@ -83,14 +117,16 @@ def _contains_keyword(text, keywords):
 def _classify_exchange(action, response):
     '''
     Classify which summary section(s) a turn's exchange likely affects, by
-    keyword match on quest-resolution and status-change phrases. Returns a
-    (possibly empty) set of affected section headers.
+    keyword match on quest-resolution, story-beat and status-change phrases.
+    Returns a (possibly empty) set of affected section headers.
     '''
     text = (action + ' ' + response).lower()
 
     affected = set()
     if _contains_keyword(text, QUEST_RESOLUTION_KEYWORDS):
         affected.add('CURRENT QUEST')
+        affected.add('OVERALL STORY')
+    if _contains_keyword(text, STORY_BEAT_KEYWORDS):
         affected.add('OVERALL STORY')
     if _contains_keyword(text, STATUS_CHANGE_KEYWORDS):
         affected.add('PLAYER STATUS')
