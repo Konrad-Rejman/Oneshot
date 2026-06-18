@@ -1,9 +1,10 @@
 '''
 Deterministic turn mechanics for the Phase 3 pipeline (training/outcomes.py).
 
-These build the parts of a GM turn the model is no longer trusted to produce
-- the named stat, the consumed roll and the STATE line - so they are tested
-like the rest of the deterministic logic: pure functions, no model calls.
+These build the parts of a GM turn that are computed in code rather than left
+to the model - the named stat, the consumed roll and the STATE line - so they
+are tested like the rest of the deterministic logic: pure functions, no model
+calls.
 The key contract is that every STATE line they emit passes the same strict
 validator that gates the dataset (validators.check_state_line).
 '''

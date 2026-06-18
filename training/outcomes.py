@@ -2,14 +2,13 @@
 Deterministic turn mechanics for the Phase 3 training pipeline (ROADMAP 3.1).
 
 The base model writes prose well but cannot reliably name the right stat,
-consume the correct roll, or emit a populated STATE line - so the generator
-no longer asks it to. From the spec's roll pool, relevant stat and action it
-computes the check announcement, the consequence tier (with the CHARACTER
-rule's stat-based shift) and the canonical STATE line here, and the model is
-asked only to narrate the given outcome. This guarantees that every training
-example demonstrates correct dice usage, the right stat, the tier->outcome
-mapping and a valid STATE line - the exact behaviours the fine-tune must
-learn but the base model rarely produces on its own.
+consume the correct roll, or emit a populated STATE line, so the generator
+does not ask it to. From the spec's roll pool, relevant stat and action this
+module computes the check announcement, the consequence tier (with the
+CHARACTER rule's stat-based shift) and the canonical STATE line; the model is
+asked only to narrate the given outcome. Every training example therefore
+demonstrates correct dice usage, the right stat, the tier->outcome mapping and
+a valid STATE line - the exact behaviours the fine-tune must learn.
 
 Pure functions over the spec's scalar fields (no model calls, no game
 imports beyond the stat name set) so the test suite covers them like the

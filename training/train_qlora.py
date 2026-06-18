@@ -83,11 +83,11 @@ def main():
 
     dataset = Dataset.from_list([to_text(r) for r in records])
 
-    # Current TRL (transformers 5.x) moved the SFT-specific knobs out of the
-    # SFTTrainer constructor into SFTConfig and renamed the tokenizer kwarg to
-    # processing_class. The sequence-length cap was also renamed across
-    # versions (max_seq_length -> max_length); set whichever the installed
-    # SFTConfig exposes so a too-small default can never truncate a response.
+    # TRL on transformers 5.x takes the SFT knobs via SFTConfig (not the
+    # SFTTrainer constructor) and the tokenizer as processing_class. The
+    # sequence-length cap is named max_seq_length on some versions and
+    # max_length on others; set whichever the installed SFTConfig exposes so a
+    # too-small default can never truncate a response.
     sft_args = SFTConfig(
         per_device_train_batch_size=2,
         gradient_accumulation_steps=4,

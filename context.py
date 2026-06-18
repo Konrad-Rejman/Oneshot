@@ -261,11 +261,9 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
                 + [{'role': 'user', 'content': action}]
             )
 
-        # Pre-send safety trim: drop oldest old messages until prompt fits under token limit
         _trim_presend(memory)
 
         try:
-            # Response streamed by function
             response_text, prompt_tokens = generate_response(memory, stream=True)
 
         except KeyboardInterrupt:
@@ -460,7 +458,6 @@ Latest interactions:
                 else:
                     ui.warn("WARNING: No valid summary candidates contained the required section(s); keeping the previous summary.")
 
-        # Post-summary trim: trim persistent memory using updated summary's actual token cost
         _trim_to_memory_budget(memory, rules['content'], hierarchical_summary,
                                character_text + progression_text)
 

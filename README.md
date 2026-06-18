@@ -36,17 +36,32 @@ No manual file or folder setup is needed: the `sessions/` transcript folder and 
 python main.py
 ```
 
-If there's no interrupted session to resume, you'll be asked for a username and then — when you have saved stories — shown a menu of them, newest first: pick one by number to continue where it left off (the GM's last message is re-printed to remind you), or choose `new` to start a fresh story, `export` to write a saved story's transcript to a file, or `delete` to remove a save.
+**Startup** walks you through a few menus (each takes a number, or a word like
+`new` / `export` / `delete`):
 
-When starting a new story you'll be shown a menu of starting scenarios — the built-in default plus any you've saved — and can pick one by number to begin. You can also choose `new` to write your own opening scene and three-part summary (overall story, current quest, player status), `edit` to change a saved scenario, or `delete` to remove one; custom scenarios are stored in `scenarios.json`.
+- **Story** — continue a saved story (newest first; the GM's last message is
+  re-printed), or start a `new` one. Saved stories live in `saves/`.
+- **Scenario** (new story only) — the built-in opening or one you've saved, or
+  `new` to write your own opening scene and three-part summary. Stored in
+  `scenarios.json`.
+- **Character** — the default or one of your own; `new` builds one (name, race,
+  class, background, six ability scores from a shared point pool). Stored in
+  `characters.json`. The GM reads the sheet every turn, so your stats shape
+  outcomes.
 
-Next you'll pick the character to play as — the built-in default or one of your own. Choose `new` to create a character (name, race, class, background) and assign its six ability scores from a shared point pool, or `delete` to remove one; custom characters are stored in `characters.json`. The GM reads the character sheet every turn, so your stats shape how actions play out.
+**During play** a status panel above the input line shows name, HP (green /
+yellow / red by how hurt you are), level, XP and the running token count. After
+you submit an action the turn's five D20 rolls appear — coloured red (failure)
+through yellow and cyan to green (success) — and the GM's response streams under
+a `GM` divider. The GM tracks HP, XP and inventory: dangerous failures cost HP,
+healing restores it, challenges earn XP. Enough XP levels you up (more max HP, a
+full heal, and a stat or class-feature reward); reaching 0 HP lets you resurrect
+at half HP for an XP cost or end the story.
 
-During play the GM tracks your character's HP, level, XP and inventory, and reads them every turn: dangerous failures cost HP, rest and healing restore it, and overcoming challenges earns XP. Earning enough XP levels you up — your maximum HP grows, you're fully healed, and you choose a reward: a stat increase or a new class feature. If your HP reaches 0 your character falls, and you choose between resurrecting (revived at half HP, for an XP cost) or ending the story there.
-
-The program will then initialise and start the gameplay loop. Each turn a status panel above the input line shows your character's name, HP (colour-coded green/yellow/red by how hurt you are), level, XP and the session's running token count. Once you submit an action, the turn's five D20 rolls are displayed, colour-coded from red (failure) through yellow and cyan to green (success), and the GM's response streams in under a `GM` divider — so GM narration, dice results, system messages and game events (level-ups, death) are each visually distinct. Press `Ctrl+C` to exit and save the session. On exit you can also keep the story in a named save slot — stored in `saves/` and offered in the saved-stories menu next time — and export the session transcript as plain text or Markdown into `exports/` (both folders are created automatically).
-
-If the program crashes unexpectedly, a `backup.pkl` file is saved with the full session state. The next run will automatically resume from it. Delete `backup.pkl` once it has been loaded to start a fresh session.
+Press `Ctrl+C` to exit and save: you can keep the story in a named slot and
+export the transcript as text or Markdown to `exports/`. If the program crashes,
+it writes `backup.pkl` with the full state and resumes from it on the next run —
+delete that file once loaded to start fresh.
 
 ## Fine-Tuned GM Model (optional)
 
