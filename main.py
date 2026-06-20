@@ -4,10 +4,11 @@ import pandas as pd
 from context import context_update
 from gm_rules import rules
 from model import choose_model
-from scenarios import choose_scenario
-from character import choose_character, Character, DEFAULT_CHARACTER
+from scenarios import choose_scenario, migrate_scenarios
+from character import choose_character, migrate_characters, Character, DEFAULT_CHARACTER
 from progression import Progression, new_progression
-from saves import choose_save, prompt_session_save, prompt_transcript_export, format_transcript_text
+from saves import (choose_save, migrate_saves, prompt_session_save,
+                   prompt_transcript_export, format_transcript_text)
 import ui
 
 # Session state persisted across runs: written to backup.pkl on a crash and
@@ -113,7 +114,7 @@ def save():
     # Ctrl+C here just skips the offers - the session files are already written.
     try:
         state = session_state(chatlogs, context_logs, memory, tokens, summary, character, progression)
-        slot_name = prompt_session_save(state)
+        slot_name = prompt_session_save(state, user)
         prompt_transcript_export(chatlogs, slot_name if slot_name else file_name)
     except KeyboardInterrupt:
         pass
@@ -172,11 +173,19 @@ else:
     # Get user identifier
     user = ui.ask('Enter your username (please use the same username for each session):')
 
-    # Continue a named saved story, or start a new one (menu skipped when no saves exist)
-    saved_state = choose_save()
+    # The first user to run after the ownership change claims any pre-existing
+    # unowned saves, characters and scenarios (one-time, no-op thereafter).
+    migrate_saves(user)
+    migrate_characters(user)
+    migrate_scenarios(user)
+
+    # Continue one of this user's saved stories, or start a new one (menu skipped
+    # when they have no saves). Only their own saves are ever offered.
+    saved_state = choose_save(user)
 
     if saved_state is not None:
-        user, chatlogs, context_logs, tokens, playtime, memory, summary, character, progression = restore_session(saved_state)
+        # Keep the username just entered; the save's stored 'User' is ignored.
+        _, chatlogs, context_logs, tokens, playtime, memory, summary, character, progression = restore_session(saved_state)
         playtime.append([time.time()]) # Add current session starttime
 
         # Re-print the last GM message so the player remembers where the story left off
@@ -189,10 +198,10 @@ else:
         playtime = [[time.time()]]
 
         # Select/write/edit/delete the scenario this session opens with
-        startMessage, summary = choose_scenario()
+        startMessage, summary = choose_scenario(user)
 
         # Select/create/delete the character this session is played as
-        character = choose_character()
+        character = choose_character(user)
 
         # Starting HP comes from Constitution
         progression = new_progression(character)

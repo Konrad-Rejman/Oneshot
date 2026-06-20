@@ -77,7 +77,9 @@ calls, prompt assembly, base/fine-tuned toggle) · `gm_rules.py` (the rules
 system prompt, shared with training) · `character.py` / `progression.py` (player
 dataclasses + STATE-line parsing/clamping) · `rolls.py` · `scoring.py`
 (summary-candidate scoring) · `saves.py` / `scenarios.py` (JSON stores) ·
-`training/` (synthetic dataset + QLoRA fine-tune).
+`ownership.py` (per-user visibility / edit-delete rules for the shared
+character & scenario stores) · `training/` (synthetic dataset + QLoRA
+fine-tune).
 
 **Per-turn data flow (`context.py:context_update`):**
 
@@ -114,5 +116,17 @@ dataclasses + STATE-line parsing/clamping) · `rolls.py` · `scoring.py`
 
 State carried across turns and the persistence formats (named save slots, crash
 `backup.pkl`) are defined in `main.py:session_state` / `restore_session`.
+
+**Per-user ownership:** the username typed at startup *is* the owner tag. Saved
+stories are private — each user's slots live in `saves/<username>/`, so the
+directory is the privacy boundary. Characters and scenarios are shared (anyone
+can load any of them) but stored as owner-tagged record lists and gated by
+`ownership.py`: only the creator may edit or delete one, and the picker
+(`ui.select`) hides other users' entries behind a toggle. The pre-ownership
+flat saves / `{name: payload}` stores are claimed by the first user to run via
+the `migrate_*` functions. The binding-rule format tests are
+`tests/test_ownership.py` plus the CRUD/migration tests in
+`test_saves.py` / `test_character.py` / `test_scenarios.py`.
+
 Tunable constants live beside the code that uses them. ROADMAP.md tracks planned
 work and records why the implementation diverged from each plan.

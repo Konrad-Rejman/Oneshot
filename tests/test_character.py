@@ -1,7 +1,8 @@
 '''
 Contracts for character.py: Character validation, dict round-trip, and
-the characters.json on-disk format. Deliberately avoids the interactive
-menus; the dataclass and file format are what must stay stable.
+the characters.json on-disk format (a list of owner-tagged records).
+Deliberately avoids the interactive menus; the dataclass and file format are
+what must stay stable.
 
 CRUD tests redirect CHARACTERS_FILE to tmp_path so a real characters.json
 is never touched.
@@ -11,6 +12,7 @@ import json
 import pytest
 
 import character
+import ownership
 from character import (
     DEFAULT_CHARACTER,
     STAT_MAX,
@@ -108,25 +110,61 @@ def character_file(tmp_path, monkeypatch):
 
 class TestCharacterCrud:
     def test_load_missing_file_returns_empty(self, character_file):
-        assert character.load_characters() == {}
+        assert character.load_characters() == []
 
     def test_add_then_load_round_trips(self, character_file):
         c = Character('Kira', 'Elf', 'Ranger', 'bg', make_stats())
-        character.add_character('Kira', c)
+        character.add_character(c, 'alice')
         loaded = character.load_characters()
-        # {name: character_dict} is the on-disk format contract.
-        assert loaded == {'Kira': c.to_dict()}
-        assert Character.from_dict(loaded['Kira']) == c
+        # A list of {**character_dict, 'owner'} records is the format contract.
+        assert loaded == [{**c.to_dict(), 'owner': 'alice'}]
+        assert Character.from_dict(loaded[0]) == c
+
+    def test_duplicate_names_across_owners_coexist(self, character_file):
+        c = Character('Kira', 'Elf', 'Ranger', 'bg', make_stats())
+        character.add_character(c, 'alice')
+        character.add_character(c, 'bob')
+        owners = sorted(r['owner'] for r in character.load_characters())
+        assert owners == ['alice', 'bob']
 
     def test_file_is_valid_utf8_json(self, character_file):
         c = Character('Kira…', 'Elf', 'Ranger', 'résumé', make_stats())
-        character.add_character('Kira…', c)
+        character.add_character(c, 'alice')
         with open(character_file, encoding='utf-8') as f:
-            assert 'Kira…' in json.load(f)
+            assert json.load(f)[0]['name'] == 'Kira…'
 
-    def test_delete_removes_and_ignores_unknown(self, character_file):
+    def test_delete_removes_own_and_ignores_unknown(self, character_file):
         c = Character('Kira', 'Elf', 'Ranger', 'bg', make_stats())
-        character.add_character('Kira', c)
-        character.delete_character('Kira')
-        assert character.load_characters() == {}
-        character.delete_character('Kira')  # unknown name: silent no-op
+        character.add_character(c, 'alice')
+        character.delete_character('Kira', 'alice')
+        assert character.load_characters() == []
+        character.delete_character('Kira', 'alice')  # unknown name: silent no-op
+
+    def test_delete_leaves_other_users_records(self, character_file):
+        c = Character('Kira', 'Elf', 'Ranger', 'bg', make_stats())
+        character.add_character(c, 'alice')
+        character.add_character(c, 'bob')
+        # bob may not delete alice's identically-named character.
+        character.delete_character('Kira', 'bob')
+        remaining = character.load_characters()
+        assert [r['owner'] for r in remaining] == ['alice']
+
+
+class TestCharacterMigration:
+    def test_legacy_dict_is_read_as_unowned_records(self, character_file):
+        c = Character('Kira', 'Elf', 'Ranger', 'bg', make_stats())
+        # The pre-ownership {name: character_dict} format on disk.
+        character_file.write_text(json.dumps({'Kira': c.to_dict()}), encoding='utf-8')
+        records = character.load_characters()
+        assert records == [{**c.to_dict(), 'owner': ownership.UNOWNED}]
+
+    def test_migrate_claims_legacy_for_first_user(self, character_file):
+        c = Character('Kira', 'Elf', 'Ranger', 'bg', make_stats())
+        character_file.write_text(json.dumps({'Kira': c.to_dict()}), encoding='utf-8')
+        character.migrate_characters('alice')
+        records = character.load_characters()
+        assert records == [{**c.to_dict(), 'owner': 'alice'}]
+
+    def test_migrate_missing_file_is_noop(self, character_file):
+        character.migrate_characters('alice')
+        assert character.load_characters() == []

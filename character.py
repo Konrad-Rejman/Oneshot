@@ -1,6 +1,7 @@
 import json, os
 from dataclasses import dataclass, field
 
+import ownership
 import ui
 
 CHARACTERS_FILE = 'characters.json'
@@ -116,26 +117,48 @@ DEFAULT_CHARACTER = Character(
 )
 
 def load_characters():
-    '''Return saved custom characters as {name: character_dict}.'''
+    '''
+    Return saved custom characters as a list of records, each a Character dict
+    plus an 'owner' (the creator's username). Characters are shared between
+    users; ownership only gates editing/deleting (ownership.py).
+
+    The pre-ownership format was a {name: character_dict} mapping; it is read
+    transparently as records with owner ownership.UNOWNED, which
+    migrate_characters() then claims for the first user to run.
+    '''
     if not os.path.exists(CHARACTERS_FILE):
-        return {}
+        return []
     with open(CHARACTERS_FILE, 'r', encoding='utf-8') as f:
-        return json.load(f)
+        data = json.load(f)
+    if isinstance(data, dict):
+        return [{**payload, 'name': name, 'owner': ownership.UNOWNED}
+                for name, payload in data.items()]
+    return data
 
-def _write_characters(characters):
+def _write_characters(records):
     with open(CHARACTERS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(characters, f, indent=2, ensure_ascii=False)
+        json.dump(records, f, indent=2, ensure_ascii=False)
 
-def add_character(name, character):
-    characters = load_characters()
-    characters[name] = character.to_dict()
-    _write_characters(characters)
+def migrate_characters(user):
+    '''Claim every pre-ownership character for user; see load_characters.'''
+    if not os.path.exists(CHARACTERS_FILE):
+        return
+    records = load_characters()
+    ownership.migrate_records(records, user)
+    _write_characters(records)
 
-def delete_character(name):
-    characters = load_characters()
-    if name in characters:
-        del characters[name]
-        _write_characters(characters)
+def add_character(character, owner):
+    records = load_characters()
+    records.append({**character.to_dict(), 'owner': owner})
+    _write_characters(records)
+
+def delete_character(name, owner):
+    '''Remove owner's character named name; other users' records are untouched.'''
+    records = load_characters()
+    kept = [r for r in records
+            if not (r['name'] == name and ownership.is_owner(r, owner))]
+    if len(kept) != len(records):
+        _write_characters(kept)
 
 def _read_stat_allocation():
     '''
@@ -171,65 +194,79 @@ def _read_stat_allocation():
                 break
         return stats
 
-def choose_character():
+def _create_character(user):
     '''
-    Interactively let the player pick, create, or delete a character.
+    Prompt for and save a new character owned by user. Names must be unique
+    among user's own characters (other users may reuse the name). Returns
+    nothing; warns and saves nothing on invalid input.
+    '''
+    own_names = {r['name'] for r in load_characters() if ownership.is_owner(r, user)}
+    name = ui.ask('Character name:').strip()
+    if not name or name == DEFAULT_NAME or name in own_names:
+        ui.warn(f'Please choose a name you have not used, other than "{DEFAULT_NAME}".')
+        return
+
+    race = ui.ask('Race:').strip()
+    char_class = ui.ask('Class:').strip()
+    background = ui.ask('Background (a sentence or two):').strip()
+    if not (race and char_class and background):
+        ui.warn('A character needs a race, class and background; nothing was saved.')
+        return
+
+    stats = _read_stat_allocation()
+    character = Character(name=name, race=race, char_class=char_class,
+                          background=background, stats=stats)
+    add_character(character, user)
+    ui.system(f'Saved character "{name}".')
+
+def _delete_character(user):
+    '''Pick one of user's own characters from a menu and delete it on confirm.'''
+    own = [r for r in load_characters() if ownership.is_owner(r, user)]
+    if not own:
+        ui.warn('You have no saved characters to delete.')
+        return
+    options = [(r['name'], r['name']) for r in own] + [('Cancel', None)]
+    name = ui.select('Delete which character?', options)
+    if name is None:
+        return
+    confirm = ui.ask(f'Type "yes" to permanently delete "{name}":').strip().lower()
+    if confirm == 'yes':
+        delete_character(name, user)
+        ui.system(f'Deleted character "{name}".')
+    else:
+        ui.system('Cancelled.')
+
+def choose_character(user):
+    '''
+    Interactively let user pick, create, or delete a character. Every user's
+    characters are listed (tagged with their creator); the show-others toggle
+    starts hidden so the menu opens with only user's own plus the default.
+    Creating and deleting only ever touch user's own characters.
 
     Returns the Character chosen to play.
     '''
+    show_others = False
     while True:
-        custom = load_characters()
-        names = [DEFAULT_NAME] + list(custom.keys())
+        records = load_characters()
+        visible = ownership.visible_records(records, user, show_others)
+        toggle_mark = 'x' if show_others else ' '
 
-        ui.menu('Characters:', names)
-        ui.system('Enter a number to play that character, "new" to create one, or "delete" to remove one.')
+        options = [(f'{DEFAULT_NAME} (built-in)', ('default', None))]
+        options += [(ownership.entry_label(r), ('play', r)) for r in visible]
+        options.append((f"[{toggle_mark}] Show other users' characters", ('toggle', None)))
+        options.append(('New character', ('new', None)))
+        if any(ownership.is_owner(r, user) for r in records):
+            options.append(('Delete one of my characters', ('delete', None)))
 
-        choice = ui.ask().strip()
-        command = choice.lower()
+        kind, record = ui.select('Characters:', options)
 
-        if command == 'new':
-            name = ui.ask('Character name:').strip()
-            if not name or name == DEFAULT_NAME or name in custom:
-                ui.warn(f'Please choose a unique name other than "{DEFAULT_NAME}".')
-                continue
-
-            race = ui.ask('Race:').strip()
-            char_class = ui.ask('Class:').strip()
-            background = ui.ask('Background (a sentence or two):').strip()
-            if not (race and char_class and background):
-                ui.warn('A character needs a race, class and background; nothing was saved.')
-                continue
-
-            stats = _read_stat_allocation()
-            character = Character(name=name, race=race, char_class=char_class,
-                                  background=background, stats=stats)
-            add_character(name, character)
-            ui.system(f'Saved character "{name}".')
-            continue
-
-        if command == 'delete':
-            if not custom:
-                ui.warn('There are no saved characters to delete.')
-                continue
-            name = ui.ask('Name of the character to delete:').strip()
-            if name not in custom:
-                ui.warn(f'No saved character named "{name}".')
-                continue
-            confirm = ui.ask(f'Type "yes" to permanently delete "{name}":').strip().lower()
-            if confirm == 'yes':
-                delete_character(name)
-                ui.system(f'Deleted character "{name}".')
-            else:
-                ui.system('Cancelled.')
-            continue
-
-        try:
-            selected = names[int(choice) - 1]
-        except (ValueError, IndexError):
-            ui.warn('Please enter a listed number, "new", or "delete".')
-            continue
-
-        if selected == DEFAULT_NAME:
+        if kind == 'default':
             return DEFAULT_CHARACTER
-
-        return Character.from_dict(custom[selected])
+        if kind == 'play':
+            return Character.from_dict(record)
+        if kind == 'toggle':
+            show_others = not show_others
+        elif kind == 'new':
+            _create_character(user)
+        elif kind == 'delete':
+            _delete_character(user)

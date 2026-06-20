@@ -1,7 +1,8 @@
 '''
-Contracts for saves.py: save-slot name sanitisation, the saves/ on-disk
-format, and transcript formatting/export. Deliberately avoids the interactive
-menus; the file format is what must stay stable.
+Contracts for saves.py: save-slot name sanitisation, the per-user saves/
+on-disk layout, legacy-save migration, and transcript formatting/export.
+Deliberately avoids the interactive menus; the file format is what must stay
+stable.
 
 CRUD tests redirect SAVES_DIR/EXPORTS_DIR to tmp_path so real player saves
 are never touched.
@@ -17,6 +18,8 @@ from saves import (
     _sanitize_name,
     format_transcript_text,
 )
+
+USER = 'tester'
 
 CHATLOGS = [
     {'role': 'assistant', 'content': 'You wake in a forest.'},
@@ -63,11 +66,11 @@ def saves_dirs(tmp_path, monkeypatch):
 
 class TestSaveSlotCrud:
     def test_list_missing_dir_returns_empty(self, saves_dirs):
-        assert saves.list_saves() == []
+        assert saves.list_saves(USER) == []
 
     def test_save_then_load_round_trips(self, saves_dirs):
-        saves.save_session('Heist', STATE)
-        loaded = saves.load_session('Heist')
+        saves.save_session('Heist', STATE, USER)
+        loaded = saves.load_session('Heist', USER)
         # The original state keys round-trip unchanged...
         for key, value in STATE.items():
             assert loaded[key] == value
@@ -75,30 +78,73 @@ class TestSaveSlotCrud:
         assert loaded['Version'] == SAVE_VERSION
         assert loaded['Name'] == 'Heist'
 
+    def test_saves_under_per_user_directory(self, saves_dirs):
+        saves.save_session('Heist', STATE, USER)
+        assert saves._save_path('Heist', USER) == os.path.join(
+            saves.SAVES_DIR, USER, 'Heist.json')
+        assert os.path.isfile(saves._save_path('Heist', USER))
+
+    def test_one_users_save_is_invisible_to_another(self, saves_dirs):
+        saves.save_session('Heist', STATE, 'alice')
+        assert saves.list_saves('bob') == []
+        assert saves.list_saves('alice') == ['Heist']
+
+    def test_same_name_different_users_coexist(self, saves_dirs):
+        saves.save_session('Heist', STATE, 'alice')
+        saves.save_session('Heist', dict(STATE, Tokens=999), 'bob')
+        assert saves.load_session('Heist', 'alice')['Tokens'] == STATE['Tokens']
+        assert saves.load_session('Heist', 'bob')['Tokens'] == 999
+
     def test_save_same_name_overwrites(self, saves_dirs):
-        saves.save_session('Heist', STATE)
-        saves.save_session('Heist', dict(STATE, Tokens=999))
-        assert saves.list_saves() == ['Heist']
-        assert saves.load_session('Heist')['Tokens'] == 999
+        saves.save_session('Heist', STATE, USER)
+        saves.save_session('Heist', dict(STATE, Tokens=999), USER)
+        assert saves.list_saves(USER) == ['Heist']
+        assert saves.load_session('Heist', USER)['Tokens'] == 999
 
     def test_list_most_recent_first(self, saves_dirs):
-        saves.save_session('Old', STATE)
-        saves.save_session('New', STATE)
+        saves.save_session('Old', STATE, USER)
+        saves.save_session('New', STATE, USER)
         # Pin mtimes: same-second writes would make recency ordering flaky.
-        os.utime(saves._save_path('Old'), (100, 100))
-        os.utime(saves._save_path('New'), (200, 200))
-        assert saves.list_saves() == ['New', 'Old']
+        os.utime(saves._save_path('Old', USER), (100, 100))
+        os.utime(saves._save_path('New', USER), (200, 200))
+        assert saves.list_saves(USER) == ['New', 'Old']
 
     def test_delete_removes_and_ignores_unknown(self, saves_dirs):
-        saves.save_session('Heist', STATE)
-        saves.delete_save('Heist')
-        assert saves.list_saves() == []
-        saves.delete_save('Heist')  # unknown name: silent no-op
+        saves.save_session('Heist', STATE, USER)
+        saves.delete_save('Heist', USER)
+        assert saves.list_saves(USER) == []
+        saves.delete_save('Heist', USER)  # unknown name: silent no-op
 
     def test_file_is_valid_utf8_json(self, saves_dirs):
-        saves.save_session('Heist', dict(STATE, Summary='résumé…'))
-        with open(saves._save_path('Heist'), encoding='utf-8') as f:
+        saves.save_session('Heist', dict(STATE, Summary='résumé…'), USER)
+        with open(saves._save_path('Heist', USER), encoding='utf-8') as f:
             assert json.load(f)['Summary'] == 'résumé…'
+
+
+class TestMigrateSaves:
+    def _write_flat(self, name):
+        # A pre-ownership save sitting directly in SAVES_DIR.
+        os.makedirs(saves.SAVES_DIR, exist_ok=True)
+        with open(os.path.join(saves.SAVES_DIR, name + '.json'), 'w', encoding='utf-8') as f:
+            json.dump(dict(STATE, Name=name, Version=SAVE_VERSION), f)
+
+    def test_flat_save_is_claimed_by_first_user(self, saves_dirs):
+        self._write_flat('Heist')
+        saves.migrate_saves('alice')
+        assert saves.list_saves('alice') == ['Heist']
+        # No flat save left behind in the top-level directory.
+        assert [f for f in os.listdir(saves.SAVES_DIR)
+                if os.path.isfile(os.path.join(saves.SAVES_DIR, f))] == []
+
+    def test_migrate_is_noop_without_flat_saves(self, saves_dirs):
+        saves.save_session('Heist', STATE, 'alice')
+        saves.migrate_saves('bob')
+        assert saves.list_saves('bob') == []
+        assert saves.list_saves('alice') == ['Heist']
+
+    def test_migrate_missing_dir_is_noop(self, saves_dirs):
+        saves.migrate_saves('alice')  # no SAVES_DIR yet: silent no-op
+        assert saves.list_saves('alice') == []
 
 
 class TestTranscriptText:

@@ -1,18 +1,22 @@
 '''
 Named save slots, startup load menu, and transcript export (ROADMAP 2.2).
 
-A save slot is a single JSON file in SAVES_DIR carrying the same state keys
-as backup.pkl ('User', 'Chat Logs', 'Context Logs', 'Tokens', 'Playtime',
-'Memory', 'Summary', 'Character', 'Progression'), plus 'Version' and 'Name'
-added on write. Version history:
+Saved stories are private to their owner: each user's slots live in their own
+SAVES_DIR/<sanitized-username>/ subdirectory, so the owning directory is the
+privacy boundary and two users may reuse a slot name. A slot is a single JSON
+file carrying the same state keys as backup.pkl ('User', 'Chat Logs',
+'Context Logs', 'Tokens', 'Playtime', 'Memory', 'Summary', 'Character',
+'Progression'), plus 'Version' and 'Name' added on write. Version history:
 - 1: the initial key set, no 'Progression'
 - 2: adds the 'Progression' key (ROADMAP 2.3 - HP/inventory/XP/level);
   version-1 saves load with a fresh progression (main.py:restore_session).
   (Early version-2 saves also carried spell-slot keys inside Progression;
   those were removed and Progression.from_dict simply ignores any extra
   keys, so such saves still load.)
-New state belongs in new keys with a SAVE_VERSION bump - never a change to
-the existing keys - so old saves stay loadable.
+The per-user layout does not touch the JSON schema, so it is not a version
+bump; migrate_saves relocates pre-existing flat saves. New state belongs in
+new keys with a SAVE_VERSION bump - never a change to the existing keys - so
+old saves stay loadable.
 '''
 import json, os, re, time
 
@@ -33,38 +37,59 @@ def _sanitize_name(name):
     cleaned = re.sub(r'[^\w \-]', '', name, flags=re.ASCII)
     return re.sub(r'\s+', ' ', cleaned).strip()
 
-def _save_path(name):
-    return os.path.join(SAVES_DIR, name + '.json')
+def _user_dir(user):
+    '''The save directory private to user; sanitised so it is path-safe.'''
+    return os.path.join(SAVES_DIR, _sanitize_name(user))
 
-def list_saves():
-    '''Names of existing save slots, most recently saved first.'''
-    if not os.path.isdir(SAVES_DIR):
+def _save_path(name, user):
+    return os.path.join(_user_dir(user), name + '.json')
+
+def list_saves(user):
+    '''Names of user's existing save slots, most recently saved first.'''
+    user_dir = _user_dir(user)
+    if not os.path.isdir(user_dir):
         return []
-    files = [f for f in os.listdir(SAVES_DIR) if f.endswith('.json')]
-    files.sort(key=lambda f: os.path.getmtime(os.path.join(SAVES_DIR, f)), reverse=True)
+    files = [f for f in os.listdir(user_dir) if f.endswith('.json')]
+    files.sort(key=lambda f: os.path.getmtime(os.path.join(user_dir, f)), reverse=True)
     return [os.path.splitext(f)[0] for f in files]
 
-def save_session(name, state):
+def save_session(name, state, user):
     '''
-    Write session state to the named slot, creating SAVES_DIR if needed and
-    overwriting any existing save with that name. state must hold the same
-    JSON-serialisable keys as backup.pkl's dict (Character already as a dict,
-    not a Character instance); 'Version' and 'Name' are added here.
+    Write session state to user's named slot, creating their save directory if
+    needed and overwriting any existing save with that name. state must hold the
+    same JSON-serialisable keys as backup.pkl's dict (Character already as a
+    dict, not a Character instance); 'Version' and 'Name' are added here.
     '''
-    os.makedirs(SAVES_DIR, exist_ok=True)
+    os.makedirs(_user_dir(user), exist_ok=True)
     payload = {'Version': SAVE_VERSION, 'Name': name}
     payload.update(state)
-    with open(_save_path(name), 'w', encoding='utf-8') as f:
+    with open(_save_path(name, user), 'w', encoding='utf-8') as f:
         json.dump(payload, f, indent=2, ensure_ascii=False)
 
-def load_session(name):
-    '''Return the saved state dict for the named slot.'''
-    with open(_save_path(name), 'r', encoding='utf-8') as f:
+def load_session(name, user):
+    '''Return the saved state dict for user's named slot.'''
+    with open(_save_path(name, user), 'r', encoding='utf-8') as f:
         return json.load(f)
 
-def delete_save(name):
-    if os.path.exists(_save_path(name)):
-        os.remove(_save_path(name))
+def delete_save(name, user):
+    if os.path.exists(_save_path(name, user)):
+        os.remove(_save_path(name, user))
+
+def migrate_saves(user):
+    '''
+    Claim pre-ownership saves for user: move any *.json sitting directly in
+    SAVES_DIR (the old flat layout) into user's private subdirectory. A no-op
+    once no flat saves remain.
+    '''
+    if not os.path.isdir(SAVES_DIR):
+        return
+    legacy = [f for f in os.listdir(SAVES_DIR)
+              if f.endswith('.json') and os.path.isfile(os.path.join(SAVES_DIR, f))]
+    if not legacy:
+        return
+    os.makedirs(_user_dir(user), exist_ok=True)
+    for f in legacy:
+        os.replace(os.path.join(SAVES_DIR, f), os.path.join(_user_dir(user), f))
 
 def format_transcript_text(chatlogs):
     '''
@@ -112,10 +137,10 @@ def export_transcript(chatlogs, name, fmt):
         f.write(text)
     return path
 
-def prompt_session_save(state):
+def prompt_session_save(state, user):
     '''
-    Exit-time prompt: offer to keep the finished session in a named slot.
-    Returns the slot name saved to, or None if the player skipped saving.
+    Exit-time prompt: offer to keep the finished session in one of user's named
+    slots. Returns the slot name saved to, or None if the player skipped saving.
     '''
     while True:
         raw = ui.ask('\nSave this story to a named slot? Enter a name, or leave blank to skip:').strip()
@@ -125,11 +150,11 @@ def prompt_session_save(state):
         if not name:
             ui.warn('That name has no usable characters; use letters, numbers, spaces, dashes or underscores.')
             continue
-        if name in list_saves():
+        if name in list_saves(user):
             confirm = ui.ask(f'A save named "{name}" already exists. Type "yes" to overwrite it:').strip().lower()
             if confirm != 'yes':
                 continue
-        save_session(name, state)
+        save_session(name, state, user)
         ui.system(f'Saved story "{name}".')
         return name
 
@@ -150,20 +175,21 @@ def prompt_transcript_export(chatlogs, default_name):
         ui.system(f'Transcript written to {path}.')
         return
 
-def choose_save():
+def choose_save(user):
     '''
-    Startup menu over existing save slots: continue, export, or delete a
-    saved story. Returns the loaded state dict to continue from, or None to
-    start a new story. Skipped entirely when no saves exist.
+    Startup menu over user's existing save slots: continue, export, or delete a
+    saved story. Other users' saves are never listed or reachable. Returns the
+    loaded state dict to continue from, or None to start a new story. Skipped
+    entirely when user has no saves.
     '''
     while True:
-        names = list_saves()
+        names = list_saves(user)
         if not names:
             return None
 
         entries = []
         for name in names:
-            saved_on = time.strftime('%Y-%m-%d %H:%M', time.localtime(os.path.getmtime(_save_path(name))))
+            saved_on = time.strftime('%Y-%m-%d %H:%M', time.localtime(os.path.getmtime(_save_path(name, user))))
             entries.append(f'{name} (saved {saved_on})')
         ui.menu('Saved stories:', entries)
         ui.system('Enter a number to continue that story, "new" to start a new one, "export" to export a transcript, or "delete" to remove a save.')
@@ -183,7 +209,7 @@ def choose_save():
             if fmt not in EXPORT_FORMATS:
                 ui.warn('Please choose "txt" or "md".')
                 continue
-            path = export_transcript(load_session(name)['Chat Logs'], name, fmt)
+            path = export_transcript(load_session(name, user)['Chat Logs'], name, fmt)
             ui.system(f'Transcript written to {path}.')
             continue
 
@@ -194,7 +220,7 @@ def choose_save():
                 continue
             confirm = ui.ask(f'Type "yes" to permanently delete "{name}":').strip().lower()
             if confirm == 'yes':
-                delete_save(name)
+                delete_save(name, user)
                 ui.system(f'Deleted save "{name}".')
             else:
                 ui.system('Cancelled.')
@@ -206,4 +232,4 @@ def choose_save():
             ui.warn('Please enter a listed number, "new", "export", or "delete".')
             continue
 
-        return load_session(selected)
+        return load_session(selected, user)

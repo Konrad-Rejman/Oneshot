@@ -36,18 +36,25 @@ No manual file or folder setup is needed: the `sessions/` transcript folder and 
 python main.py
 ```
 
-**Startup** walks you through a few menus (each takes a number, or a word like
-`new` / `export` / `delete`):
+**Startup** first asks for your username. It identifies you across sessions and
+tags everything you create, so a shared install keeps players apart:
 
-- **Story** — continue a saved story (newest first; the GM's last message is
-  re-printed), or start a `new` one. Saved stories live in `saves/`.
-- **Scenario** (new story only) — the built-in opening or one you've saved, or
-  `new` to write your own opening scene and three-part summary. Stored in
-  `scenarios.json`.
-- **Character** — the default or one of your own; `new` builds one (name, race,
+- **Story** — continue one of *your* saved stories (numbered, newest first; the
+  GM's last message is re-printed), or start a `new` one. Other players' saves
+  are never shown. Saved stories live in `saves/<username>/`.
+- **Scenario** (new story only) — the built-in opening, one you've saved, or
+  `New scenario` to write your own opening scene and three-part summary. Stored
+  in `scenarios.json`.
+- **Character** — the default, one you've made, or `New character` (name, race,
   class, background, six ability scores from a shared point pool). Stored in
   `characters.json`. The GM reads the sheet every turn, so your stats shape
   outcomes.
+
+The Scenario and Character menus are navigated with the **arrow keys + Enter**.
+Characters and scenarios are shared between players and tagged with their
+creator (`Gandalf (alice)`); other players' entries are hidden until you select
+the `[ ] Show other users'…` line to toggle them on. You can load anyone's, but
+only edit or delete your own.
 
 **During play** a status panel above the input line shows name, HP (green /
 yellow / red by how hurt you are), level, XP and the running token count. After

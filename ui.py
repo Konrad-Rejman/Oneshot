@@ -17,10 +17,18 @@ text is always wrapped in Text() or printed with markup=False so model
 output and exception messages containing brackets are never parsed as
 rich markup.
 '''
+import sys
+
 from rich.console import Console
+from rich.live import Live
 from rich.panel import Panel
 from rich.rule import Rule
 from rich.text import Text
+
+try:
+    import msvcrt  # Windows-only raw key reads, for the interactive select menu
+except ImportError:
+    msvcrt = None
 
 console = Console(highlight=False)
 
@@ -88,6 +96,70 @@ def menu(title, entries):
         line = Text(f'  {i}. ', style=SYSTEM_STYLE)
         line.append(str(entry))
         console.print(line)
+
+def _interactive_keys():
+    '''
+    True when arrow-key selection is possible: msvcrt is present (Windows) and
+    both ends of the terminal are a real tty. Otherwise select() falls back to
+    a numbered prompt, keeping headless and non-Windows runs working.
+    '''
+    return msvcrt is not None and sys.stdin.isatty() and sys.stdout.isatty()
+
+def _render_select(title, options, index, help_text):
+    body = Text()
+    body.append(str(title), style=HEADING_STYLE)
+    for i, (label, _) in enumerate(options):
+        body.append('\n')
+        if i == index:
+            body.append('> ', style=PROMPT_STYLE)
+            body.append(str(label), style=PROMPT_STYLE)
+        else:
+            body.append('  ', style=SYSTEM_STYLE)
+            body.append(str(label))
+    if help_text:
+        body.append('\n\n')
+        body.append(str(help_text), style=SYSTEM_STYLE)
+    return body
+
+def _select_fallback(title, options):
+    '''Numbered-menu equivalent of select() for non-interactive terminals.'''
+    menu(title, [label for label, _ in options])
+    while True:
+        raw = ask('Enter a number:').strip()
+        try:
+            return options[int(raw) - 1][1]
+        except (ValueError, IndexError):
+            warn('Please enter a listed number.')
+
+def select(title, options, help_text='Use the arrow keys to move, Enter to choose.'):
+    '''
+    Arrow-key menu: render options with a cursor and return the chosen option's
+    value. options is a list of (label, value) pairs. Up/Down move (wrapping),
+    Enter chooses; Ctrl+C propagates as KeyboardInterrupt so the game's
+    save/exit flow is unaffected. Falls back to a numbered prompt when the
+    terminal can't be read raw (_interactive_keys).
+    '''
+    if not options:
+        return None
+    if not _interactive_keys():
+        return _select_fallback(title, options)
+
+    index = 0
+    with Live(_render_select(title, options, index, help_text),
+              console=console, auto_refresh=False, transient=True) as live:
+        while True:
+            key = msvcrt.getwch()
+            if key == '\x03':  # Ctrl+C: preserve the input()/KeyboardInterrupt contract
+                raise KeyboardInterrupt
+            if key in ('\x00', '\xe0'):  # arrow keys arrive as a two-char sequence
+                arrow = msvcrt.getwch()
+                if arrow == 'H':
+                    index = (index - 1) % len(options)
+                elif arrow == 'P':
+                    index = (index + 1) % len(options)
+            elif key in ('\r', '\n'):
+                return options[index][1]
+            live.update(_render_select(title, options, index, help_text), refresh=True)
 
 def ask(prompt=''):
     '''

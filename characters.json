@@ -1,5 +1,5 @@
-{
-  "Akshan": {
+[
+  {
     "name": "Akshan",
     "race": "Human",
     "char_class": "Archer",
@@ -11,6 +11,7 @@
       "Intelligence": 5,
       "Wisdom": 4,
       "Charisma": 3
-    }
+    },
+    "owner": "u00"
   }
-}
+]
