@@ -260,3 +260,27 @@ def choose_scenario(user):
             _edit_scenario(user)
         elif kind == 'delete':
             _delete_scenario(user)
+
+def manage_scenarios(user):
+    '''
+    Main-menu management screen: create, edit or delete user's own scenarios,
+    then return. Unlike choose_scenario there is no play/select outcome -
+    starting a game picks a scenario separately.
+    '''
+    while True:
+        options = [('New scenario', 'new')]
+        if any(ownership.is_owner(r, user) for r in load_scenarios()):
+            options.append(('Edit one of my scenarios', 'edit'))
+            options.append(('Delete one of my scenarios', 'delete'))
+        options.append(('Back', 'back'))
+
+        kind = ui.select('Manage scenarios:', options)
+
+        if kind == 'new':
+            _create_scenario(user)
+        elif kind == 'edit':
+            _edit_scenario(user)
+        elif kind == 'delete':
+            _delete_scenario(user)
+        else:
+            return

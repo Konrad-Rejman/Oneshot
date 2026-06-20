@@ -9,7 +9,8 @@ the plain-text format, and mangling or dropping the machine-read STATE line.
 The original model is untouched. The fine-tuned model is published on the
 Ollama registry as `Konrad-Rejman/gm-istral-v01` (`ollama pull
 Konrad-Rejman/gm-istral-v01`); when installed under that name, the game
-offers a base/fine-tuned toggle at startup (`model.py:choose_model`) and
+offers a base/fine-tuned choice as the per-account default model
+(`model.py:choose_default_model`, set on first login or in Settings) and
 shows the active model in the status bar, so the two can be compared side by
 side. The toggle keys off `model.py:FINETUNED_MODEL_NAME`, so a locally built
 copy must be registered under the same name to be detected.

@@ -53,7 +53,8 @@ module — read the test, not a paraphrase of it.
 
 **Binding rule:** any intentional behaviour change to memory trimming, summary
 parsing/classification, the keyword lists, prompt assembly, the STATE-line
-grammar or progression clamping, the scenarios.json format, or the training
+grammar or progression clamping, the scenarios.json format, the accounts.json
+format / hashing / authentication (`tests/test_accounts.py`), or the training
 validators/spec samplers/turn-mechanics (`training/outcomes.py`) must update the
 corresponding tests in the same change.
 
@@ -71,15 +72,26 @@ print/input goes through `ui.py` (a `rich` presentation layer), so game logic
 never touches `print`/`input` directly and a later full-screen TUI only has to
 reimplement `ui.py`.
 
-**Modules:** `main.py` (startup menus, session/save restore, game loop) ·
-`context.py` (`context_update` — the per-turn pipeline) · `model.py` (Ollama
-calls, prompt assembly, base/fine-tuned toggle) · `gm_rules.py` (the rules
-system prompt, shared with training) · `character.py` / `progression.py` (player
-dataclasses + STATE-line parsing/clamping) · `rolls.py` · `scoring.py`
-(summary-candidate scoring) · `saves.py` / `scenarios.py` (JSON stores) ·
-`ownership.py` (per-user visibility / edit-delete rules for the shared
-character & scenario stores) · `training/` (synthetic dataset + QLoRA
-fine-tune).
+**Modules:** `main.py` (account screen, main menu, session/save restore, game
+loop) · `accounts.py` (login credentials as sha512 hashes + the persistent
+per-user default model, in `accounts.json`) · `context.py` (`context_update` —
+the per-turn pipeline) · `model.py` (Ollama calls, prompt assembly,
+base/fine-tuned toggle) · `gm_rules.py` (the rules system prompt, shared with
+training) · `character.py` / `progression.py` (player dataclasses + STATE-line
+parsing/clamping) · `rolls.py` · `scoring.py` (summary-candidate scoring) ·
+`saves.py` / `scenarios.py` (JSON stores) · `ownership.py` (per-user visibility
+/ edit-delete rules for the shared character & scenario stores) · `training/`
+(synthetic dataset + QLoRA fine-tune).
+
+**Startup flow (`main.py:main`):** ensure setup/Ollama · `accounts.ensure_seed`
+(creates the `u00`/`admin` account on first run) · `account_screen` (log in /
+create account) · one-time `migrate_*` claims of pre-account data · first-login
+default-model init (`accounts` ↔ `model.choose_default_model`) · resume a
+user-owned `backup.pkl` if present · `menu_loop` (New game · Continue ·
+Characters · Scenarios · Settings · Exit), all arrow-navigated via `ui.select`.
+A session ends by raising `context.SessionEnd` (Ctrl+C or an unrevived death,
+after `save()`), which `run_game` catches to return to the menu rather than
+exiting; a crash still `backup()`s and `quit()`s.
 
 **Per-turn data flow (`context.py:context_update`):**
 
@@ -115,7 +127,9 @@ fine-tune).
   saves loadable.
 
 State carried across turns and the persistence formats (named save slots, crash
-`backup.pkl`) are defined in `main.py:session_state` / `restore_session`.
+`backup.pkl`) are defined in `main.py:_state_dict` / `session_from_state`; a live
+session is a `SimpleNamespace` with those same fields, and `save`/`backup` are
+closures over it (`make_save` / `make_backup`).
 
 **Per-user ownership:** the username typed at startup *is* the owner tag. Saved
 stories are private — each user's slots live in `saves/<username>/`, so the

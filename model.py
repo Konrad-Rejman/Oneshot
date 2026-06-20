@@ -43,30 +43,44 @@ def is_installed(name, installed):
         return name in installed
     return any(entry == name or entry.split(':', 1)[0] == name for entry in installed)
 
-def choose_model():
+def _model_options():
     '''
-    Startup model toggle: when the fine-tuned model is installed in Ollama,
-    ask which model runs the GM this session (blank defaults to base, so
-    evaluation sessions are an explicit choice); when it is not installed,
-    keep the base model without showing a menu. Returns the active model.
+    Selectable GM models as (label, model_name) pairs: the base is always
+    available; the fine-tuned model is offered only when installed in Ollama.
     '''
-    if not is_installed(FINETUNED_MODEL_NAME, installed_models()):
+    options = [(f'{BASE_MODEL_NAME} (base)', BASE_MODEL_NAME)]
+    if is_installed(FINETUNED_MODEL_NAME, installed_models()):
+        options.append((f'{FINETUNED_MODEL_NAME} (fine-tuned)', FINETUNED_MODEL_NAME))
+    return options
+
+def choose_default_model(current=None):
+    '''
+    Ask which model should be the GM by default. When only the base model is
+    available there is no real choice, so return it without prompting; the
+    one-time first-login init is then silent. Returns the chosen model name.
+    current, when given, is marked in the menu as the existing default.
+    '''
+    options = _model_options()
+    if len(options) == 1:
+        return options[0][1]
+    labelled = [
+        (f'{label} (current)' if name == current else label, name)
+        for label, name in options
+    ]
+    return ui.select('Choose the default Game Master model:', labelled)
+
+def apply_default_model(name):
+    '''
+    Make name the active GM model for the session. Falls back to the base
+    model (warning, leaving the stored default untouched) when name is unset
+    or no longer installed - e.g. a fine-tuned default that was removed.
+    '''
+    if name and is_installed(name, installed_models()):
+        set_active_model(name)
+    else:
+        if name:
+            ui.warn(f'Default model "{name}" is not installed; using {BASE_MODEL_NAME}.')
         set_active_model(BASE_MODEL_NAME)
-        return MODEL_NAME
-    ui.menu('Choose the Game Master model for this session:', [
-        f'{BASE_MODEL_NAME} (base)',
-        f'{FINETUNED_MODEL_NAME} (fine-tuned)',
-    ])
-    while True:
-        choice = ui.ask('Model (blank for base):').strip()
-        if choice in ('', '1'):
-            set_active_model(BASE_MODEL_NAME)
-            break
-        if choice == '2':
-            set_active_model(FINETUNED_MODEL_NAME)
-            break
-        ui.warn('Please enter 1, 2, or leave blank for the base model.')
-    ui.system(f'Game Master model: {MODEL_NAME}')
     return MODEL_NAME
 
 def _build_prompt_from_memory(memory):

@@ -12,3 +12,4 @@ training/data/
 training/private/
 training/outputs/
 *.gguf
+accounts.json

@@ -270,3 +270,24 @@ def choose_character(user):
             _create_character(user)
         elif kind == 'delete':
             _delete_character(user)
+
+def manage_characters(user):
+    '''
+    Main-menu management screen: create or delete user's own characters, then
+    return. Unlike choose_character there is no play/select outcome - starting
+    a game picks a character separately.
+    '''
+    while True:
+        options = [('New character', 'new')]
+        if any(ownership.is_owner(r, user) for r in load_characters()):
+            options.append(('Delete one of my characters', 'delete'))
+        options.append(('Back', 'back'))
+
+        kind = ui.select('Manage characters:', options)
+
+        if kind == 'new':
+            _create_character(user)
+        elif kind == 'delete':
+            _delete_character(user)
+        else:
+            return

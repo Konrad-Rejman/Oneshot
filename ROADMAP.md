@@ -58,7 +58,7 @@ initialisation still pending under 1.2.
 Named save slots (`saves.py`): one JSON file per slot in `saves/` holding the
 same state keys as `backup.pkl` plus `Version`/`Name`. Startup menu lists them
 newest-first to continue / export / delete; `backup.pkl` crash-resume takes
-priority and both restore through `main.py:restore_session`. Transcript export
+priority and both restore through `main.py:session_from_state`. Transcript export
 to `exports/` as plain text or Markdown.
 
 ### 2.3 Character Stats and Progression — DONE
@@ -88,6 +88,22 @@ aren't parsed.
 **Divergence:** `rich` over `textual`, so the layout scrolls rather than being a
 true pinned-input split-pane. The path to `textual` stays open because game
 logic never touches `print`/`input` directly — only `ui.py` would change.
+
+### 2.5 User Accounts and Main Menu — DONE
+
+The free-text username prompt became an account screen (`main.py:account_screen`):
+log in or create an account, password entered masked (`ui.ask_secret`) and stored
+only as an sha512 hash in `accounts.json` (`accounts.py`). The seeded `u00`/`admin`
+account owns the pre-account data. The username is still the owner tag, so the
+`ownership.py` rules and `migrate_*` claims are unchanged. After login an
+arrow-navigated main menu (New game · Continue · Characters · Scenarios · Settings
+· Exit) loops back after each session — a session ends by raising
+`context.SessionEnd` (caught by `run_game`) instead of `quit()`ing the process.
+
+**Default model now persistent:** the per-session `choose_model()` prompt became a
+per-account default (`accounts.default_model`), asked once on first login and
+changeable in Settings; `model.apply_default_model` falls back to base when a
+stored fine-tuned default is no longer installed.
 
 ---
 
@@ -126,8 +142,9 @@ machine's 6 GB GPU can't train a 7B). Paid-platform guide in `training/private/`
 
 **Model toggle (pulled forward from 3.4):** the fine-tune registers as
 `Konrad-Rejman/gm-istral-v01` alongside the untouched base model;
-`choose_model()` offers the toggle only when it's installed (default: base) and
-the status bar names the active model.
+`model.choose_default_model()` offers the toggle only when it's installed
+(default: base, persisted per account — see 2.5) and the status bar names the
+active model.
 
 ### 3.3 Hardware Plan
 
@@ -148,8 +165,8 @@ Step-by-step paid guide: `training/private/PAID_FINETUNING_GUIDE.md` (gitignored
 Unsloth exports a merged Q4_K_M GGUF directly, replacing the separate
 merge/convert/quantise steps. Register with
 `ollama create Konrad-Rejman/gm-istral-v01 -f training/Modelfile`. `MODEL_NAME`
-is **not** repointed — the base stays default and `choose_model()` toggles per
-session.
+is **not** repointed — the base stays the default and the per-account default
+model (2.5) selects between them.
 
 ### 3.5 Evaluation — pending
 

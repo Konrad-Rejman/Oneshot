@@ -17,6 +17,7 @@ text is always wrapped in Text() or printed with markup=False so model
 output and exception messages containing brackets are never parsed as
 rich markup.
 '''
+import getpass
 import sys
 
 from rich.console import Console
@@ -169,6 +170,41 @@ def ask(prompt=''):
     '''
     label = f'{prompt} ' if prompt else '> '
     return console.input(Text(label, style=PROMPT_STYLE))
+
+def ask_secret(prompt='Password:'):
+    '''
+    Read a line without echoing it (password entry): each character shows as
+    '*'. Uses raw key reads when the terminal supports them (same mechanism as
+    select), masking as you type and honouring Backspace; Ctrl+C propagates as
+    KeyboardInterrupt so the save/exit flow is unaffected. Falls back to
+    getpass on terminals that can't be read raw. Returns the typed string.
+    '''
+    label = f'{prompt} ' if prompt else '> '
+    if not _interactive_keys():
+        console.print(Text(label, style=PROMPT_STYLE), end='')
+        return getpass.getpass('')
+
+    console.print(Text(label, style=PROMPT_STYLE), end='')
+    chars = []
+    while True:
+        key = msvcrt.getwch()
+        if key == '\x03':  # Ctrl+C: preserve the input()/KeyboardInterrupt contract
+            raise KeyboardInterrupt
+        if key in ('\r', '\n'):
+            console.print()
+            return ''.join(chars)
+        if key in ('\b', '\x7f'):  # Backspace: erase the last masked char
+            if chars:
+                chars.pop()
+                console.file.write('\b \b')
+                console.file.flush()
+            continue
+        if key in ('\x00', '\xe0'):  # swallow the two-char arrow/function sequences
+            msvcrt.getwch()
+            continue
+        chars.append(key)
+        console.file.write('*')
+        console.file.flush()
 
 def read_line():
     '''Unstyled line read, for multi-line text entry (scenario editing).'''

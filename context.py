@@ -8,6 +8,14 @@ from progression import (
 )
 import copy, re
 
+# Raised to end a session gracefully (player Ctrl+C, or a death they declined to
+# revive from) after save() has run, so the caller can return to the main menu
+# instead of exiting the process. Subclasses BaseException - not Exception - so
+# the generic `except Exception` handlers below never swallow it, exactly as
+# quit()'s SystemExit was not swallowed. Crashes still backup() and quit().
+class SessionEnd(BaseException):
+    pass
+
 TOKEN_LIMIT = 4096
 ROLLS_TOKEN_RESERVE = 30
 ACTION_TOKEN_RESERVE = 200
@@ -269,7 +277,7 @@ def context_update(chatlogs, context_logs, memory, rules, hierarchical_summary, 
         except KeyboardInterrupt:
 
             save()
-            quit()
+            raise SessionEnd
 
         except Exception as e:
 
@@ -480,12 +488,12 @@ Latest interactions:
                     memory.append(revival)
                 else:
                     save()
-                    quit()
+                    raise SessionEnd
 
     except KeyboardInterrupt:
 
         save()
-        quit()
+        raise SessionEnd
 
     except Exception as e:
 
